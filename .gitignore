@@ -1,0 +1,8 @@
+backend/.venv/
+__pycache__/
+*.pyc
+node_modules/
+*.mp4
+frames/
+.env
+frontend/config.local.js

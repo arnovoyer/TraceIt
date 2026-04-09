@@ -1,0 +1,12 @@
+{
+  "name": "gpx-overlay-render",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "render": "node render-headless.js"
+  },
+  "dependencies": {
+    "puppeteer": "24.8.2"
+  }
+}

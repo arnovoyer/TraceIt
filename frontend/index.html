@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GPX 3D Flight</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="toolbar">
+        <h1>GPX 3D Flight</h1>
+        <label class="file-input-label" for="gpxInput">GPX hochladen</label>
+        <input id="gpxInput" type="file" accept=".gpx" />
+
+        <label for="durationInput">Dauer (Sek.)</label>
+        <input id="durationInput" type="number" min="5" max="300" value="40" />
+
+        <label for="formatSelect">Format</label>
+        <select id="formatSelect">
+          <option value="landscape" selected>16:9</option>
+          <option value="portrait">9:16</option>
+        </select>
+
+        <button id="playButton" disabled>Animation starten</button>
+        <button id="recordButton" disabled>Animation aufnehmen & herunterladen</button>
+      </header>
+
+      <section class="status-row">
+        <p id="statusText">Warte auf GPX-Datei ...</p>
+      </section>
+
+      <section id="mapStage">
+        <div id="mapFrame" class="landscape">
+          <section id="map"></section>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script src="./config.local.js"></script>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
