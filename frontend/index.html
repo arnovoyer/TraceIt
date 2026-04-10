@@ -34,10 +34,6 @@
       <section id="mapStage">
         <div id="mapFrame" class="landscape">
           <div id="altitudeOverlay" class="altitude-overlay hidden" aria-label="Hoehenprofil">
-            <div class="altitude-header">
-              <span>Altitude</span>
-              <span id="altitudeProgressLabel">0%</span>
-            </div>
             <svg id="altitudeSvg" viewBox="0 0 320 96" preserveAspectRatio="none">
               <defs>
                 <clipPath id="altitudeProgressClip">
@@ -49,10 +45,6 @@
               <path id="altitudeLineBg" d=""></path>
               <path id="altitudeLineDone" d="" clip-path="url(#altitudeProgressClip)"></path>
             </svg>
-            <div class="altitude-labels">
-              <span id="altitudeMin">0 m</span>
-              <span id="altitudeMax">0 m</span>
-            </div>
           </div>
           <section id="map"></section>
         </div>

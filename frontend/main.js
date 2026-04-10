@@ -18,9 +18,6 @@ const altitudeAreaDone = document.getElementById("altitudeAreaDone");
 const altitudeLineBg = document.getElementById("altitudeLineBg");
 const altitudeLineDone = document.getElementById("altitudeLineDone");
 const altitudeClipRect = document.getElementById("altitudeClipRect");
-const altitudeProgressLabel = document.getElementById("altitudeProgressLabel");
-const altitudeMin = document.getElementById("altitudeMin");
-const altitudeMax = document.getElementById("altitudeMax");
 
 let routePoints = [];
 let cameraPoints = [];
@@ -273,7 +270,6 @@ function updateAltitudeOverlayProgress(progress) {
 
   const clamped = Math.min(1, Math.max(0, progress));
   altitudeClipRect.setAttribute("width", String(altitudeOverlayState.width * clamped));
-  altitudeProgressLabel.textContent = `${Math.round(clamped * 100)}%`;
 }
 
 function renderAltitudeOverlay(points) {
@@ -290,9 +286,6 @@ function renderAltitudeOverlay(points) {
   altitudeLineBg.setAttribute("d", data.linePath);
   altitudeLineDone.setAttribute("d", data.linePath);
   altitudeClipRect.setAttribute("height", String(data.height));
-
-  altitudeMin.textContent = `${Math.round(data.minEle)} m`;
-  altitudeMax.textContent = `${Math.round(data.maxEle)} m`;
   updateAltitudeOverlayProgress(0);
   altitudeOverlay.classList.remove("hidden");
 }
