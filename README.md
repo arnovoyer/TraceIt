@@ -48,6 +48,7 @@ Wichtig:
   - `frontend/config.local.js` ist in `.gitignore` und wird nicht nach GitHub gepusht
 - Button `Animation aufnehmen & herunterladen` erzeugt einen direkten Download als `.webm`.
 - Über `Format` kannst du zwischen `16:9` und `9:16` wechseln (wirkt auf Preview und Aufnahme).
+- Oben links wird ein Höhenprofil aus der GPX angezeigt: bereits gefahrene Strecke farbig, restlicher Teil transparent.
 
 ## 3b) Typischer Fehler: "NetworkError when attempting to fetch resource"
 

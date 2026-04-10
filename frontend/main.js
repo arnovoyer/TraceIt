@@ -12,14 +12,25 @@ const recordButton = document.getElementById("recordButton");
 const durationInput = document.getElementById("durationInput");
 const formatSelect = document.getElementById("formatSelect");
 const mapFrame = document.getElementById("mapFrame");
+const altitudeOverlay = document.getElementById("altitudeOverlay");
+const altitudeAreaBg = document.getElementById("altitudeAreaBg");
+const altitudeAreaDone = document.getElementById("altitudeAreaDone");
+const altitudeLineBg = document.getElementById("altitudeLineBg");
+const altitudeLineDone = document.getElementById("altitudeLineDone");
+const altitudeClipRect = document.getElementById("altitudeClipRect");
+const altitudeProgressLabel = document.getElementById("altitudeProgressLabel");
+const altitudeMin = document.getElementById("altitudeMin");
+const altitudeMax = document.getElementById("altitudeMax");
 
 let routePoints = [];
 let cameraPoints = [];
 let animationFrameId = null;
 let isRecording = false;
+let altitudeOverlayState = null;
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
+const MAX_ALTITUDE_POINTS = 700;
 const TRAIL_UPDATE_INTERVAL_MS = 16;
 
 const CAMERA_CONFIG = {
@@ -188,6 +199,102 @@ function createPointFeature(lon, lat, properties = {}) {
     },
     properties,
   };
+}
+
+function buildAltitudePathData(points) {
+  if (!points || points.length < 2) {
+    return null;
+  }
+
+  const stride = Math.max(1, Math.ceil(points.length / MAX_ALTITUDE_POINTS));
+  const sampled = [];
+  for (let i = 0; i < points.length; i += stride) {
+    sampled.push(points[i]);
+  }
+  if (sampled[sampled.length - 1] !== points[points.length - 1]) {
+    sampled.push(points[points.length - 1]);
+  }
+
+  const distances = [0];
+  let totalDistance = 0;
+  for (let i = 1; i < sampled.length; i += 1) {
+    totalDistance += distanceMeters(sampled[i - 1], sampled[i]);
+    distances.push(totalDistance);
+  }
+
+  if (totalDistance <= 0) {
+    return null;
+  }
+
+  let minEle = Number.POSITIVE_INFINITY;
+  let maxEle = Number.NEGATIVE_INFINITY;
+  sampled.forEach((p) => {
+    minEle = Math.min(minEle, p.ele);
+    maxEle = Math.max(maxEle, p.ele);
+  });
+
+  if (!Number.isFinite(minEle) || !Number.isFinite(maxEle)) {
+    return null;
+  }
+
+  const width = 320;
+  const height = 96;
+  const topPad = 8;
+  const bottomPad = 10;
+  const plotHeight = height - topPad - bottomPad;
+  const elevationRange = Math.max(1, maxEle - minEle);
+
+  const coords = sampled.map((p, idx) => {
+    const x = (distances[idx] / totalDistance) * width;
+    const eleNorm = (p.ele - minEle) / elevationRange;
+    const y = topPad + (1 - eleNorm) * plotHeight;
+    return { x, y };
+  });
+
+  const linePath = coords
+    .map((c, idx) => `${idx === 0 ? "M" : "L"}${c.x.toFixed(2)} ${c.y.toFixed(2)}`)
+    .join(" ");
+  const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
+
+  return {
+    linePath,
+    areaPath,
+    width,
+    height,
+    minEle,
+    maxEle,
+  };
+}
+
+function updateAltitudeOverlayProgress(progress) {
+  if (!altitudeOverlayState || !altitudeClipRect) {
+    return;
+  }
+
+  const clamped = Math.min(1, Math.max(0, progress));
+  altitudeClipRect.setAttribute("width", String(altitudeOverlayState.width * clamped));
+  altitudeProgressLabel.textContent = `${Math.round(clamped * 100)}%`;
+}
+
+function renderAltitudeOverlay(points) {
+  const data = buildAltitudePathData(points);
+  altitudeOverlayState = data;
+
+  if (!data) {
+    altitudeOverlay.classList.add("hidden");
+    return;
+  }
+
+  altitudeAreaBg.setAttribute("d", data.areaPath);
+  altitudeAreaDone.setAttribute("d", data.areaPath);
+  altitudeLineBg.setAttribute("d", data.linePath);
+  altitudeLineDone.setAttribute("d", data.linePath);
+  altitudeClipRect.setAttribute("height", String(data.height));
+
+  altitudeMin.textContent = `${Math.round(data.minEle)} m`;
+  altitudeMax.textContent = `${Math.round(data.maxEle)} m`;
+  updateAltitudeOverlayProgress(0);
+  altitudeOverlay.classList.remove("hidden");
 }
 
 function sanitizeAndSamplePoints(points) {
@@ -551,6 +658,7 @@ async function applyParsedGpxData(data) {
   const sampledPoints = sanitizeAndSamplePoints(data.points);
   routePoints = densifyRoutePoints(sampledPoints, 10);
   cameraPoints = smoothRoutePoints(routePoints, 8);
+  renderAltitudeOverlay(sampledPoints);
 
   if (!map.isStyleLoaded()) {
     await new Promise((resolve) => map.once("load", resolve));
@@ -608,6 +716,7 @@ function startAnimation() {
 
     resetAnimatedRouteLine();
     updateRouteHead(routePoints[0], 0);
+    updateAltitudeOverlayProgress(0);
 
     const animate = (now) => {
       try {
@@ -616,6 +725,7 @@ function startAnimation() {
         lastFrameAt = now;
         const timedOut = now >= hardStopTime;
         const progress = timedOut ? 1 : Math.min(1, Math.max(0, elapsed / durationMs));
+        updateAltitudeOverlayProgress(progress);
 
         const scaled = progress * segmentCount;
         const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
@@ -701,6 +811,7 @@ function startAnimation() {
           setStatus("Route fertig, Kamera zoomt fuer Gesamtansicht raus ...");
 
           playRouteOutro(outroDuration).then(() => {
+            updateAltitudeOverlayProgress(1);
             if (timedOut) {
               setStatus("Animation mit Failsafe beendet (Zeitlimit erreicht). Gesamtansicht gesetzt.");
             } else {
