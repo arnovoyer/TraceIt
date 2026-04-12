@@ -1,6 +1,6 @@
-# GPX Video Overlay (Starter)
+# GPX Video Overlay
 
-Dieses Starter-Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre GL JS und einem FastAPI-Backend.
+Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre GL JS und einem FastAPI-Backend.
 
 ## Architektur
 
