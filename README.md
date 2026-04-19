@@ -160,12 +160,6 @@ Wichtig bei Remotion:
 - Headless Rendering von WebGL kann je nach Umgebung GPU/Flags benötigen
 - Für reproduzierbare Ergebnisse: framebasierte Interpolation statt realtime easing
 
-## 7) Nächste Ausbaustufen
-
-- GPX-Glättung (Douglas-Peucker / Catmull-Rom)
-- Geschwindigkeitsabhängige Kamera (Zoom/Pitch variabel)
-- Höhenprofil-Overlay
-- Serverseitige Render-Queue (z. B. Celery + FFmpeg)
 
 ## API Response (Parse)
 
