@@ -527,9 +527,9 @@ function drawRouteLine() {
     type: "line",
     source: "route",
     paint: {
-      "line-color": "#80ffdb",
-      "line-width": 5,
-      "line-opacity": 0.9,
+      "line-color": "#FBBF24",
+      "line-width": 5.2,
+      "line-opacity": 0.95,
     },
   });
 
@@ -538,10 +538,10 @@ function drawRouteLine() {
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 18,
-      "circle-color": "#ffe000",
-      "circle-opacity": 0.4,
-      "circle-blur": 0.85,
+      "circle-radius": 20,
+      "circle-color": "#FBBF24",
+      "circle-opacity": 0.35,
+      "circle-blur": 1.2,
     },
   });
 
