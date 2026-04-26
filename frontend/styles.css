@@ -204,6 +204,14 @@ input[type="number"]::selection {
   margin-top: 8px;
 }
 
+.insight-row.muted {
+  opacity: 0.45;
+}
+
+.insight-row.unlocked {
+  opacity: 1;
+}
+
 .insight-icon {
   width: 22px;
   height: 22px;
@@ -251,6 +259,19 @@ input[type="number"]::selection {
   border: 3px solid #facc15;
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.4);
   position: relative;
+  transition: opacity 0.25s ease, filter 0.25s ease;
+}
+
+.highlight-marker.locked,
+.photo-spot-marker.locked {
+  opacity: 0.4;
+  filter: saturate(0.6) brightness(0.84);
+}
+
+.highlight-marker.unlocked,
+.photo-spot-marker.unlocked {
+  opacity: 1;
+  filter: none;
 }
 
 .highlight-marker::after {
@@ -290,6 +311,7 @@ input[type="number"]::selection {
   border: 2px solid #facc15;
   background: #0f1a2a;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.25s ease, filter 0.25s ease;
 }
 
 .photo-spot-marker img {

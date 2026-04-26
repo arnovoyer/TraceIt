@@ -22,6 +22,8 @@ const altitudeClipRect = document.getElementById("altitudeClipRect");
 const insightPanel = document.getElementById("insightPanel");
 const maxSpeedValue = document.getElementById("maxSpeedValue");
 const maxElevationValue = document.getElementById("maxElevationValue");
+const maxSpeedRow = document.getElementById("maxSpeedRow");
+const maxElevationRow = document.getElementById("maxElevationRow");
 const photoSpotCount = document.getElementById("photoSpotCount");
 const insightEvent = document.getElementById("insightEvent");
 
@@ -44,6 +46,7 @@ const HIGHLIGHT_SLOWDOWN_RADIUS = 55;
 const HIGHLIGHT_SLOWDOWN_STRENGTH = 0.56;
 const PHOTO_SLOWDOWN_RADIUS = 42;
 const PHOTO_SLOWDOWN_STRENGTH = 0.46;
+const PROXIMITY_VISIBLE_RADIUS = 9;
 
 const CAMERA_CONFIG = {
   pitch: 74,
@@ -264,16 +267,71 @@ function updateInsightsPanel() {
     return;
   }
 
-  maxSpeedValue.textContent = routeInsights.fastest
-    ? formatSpeedKmh(routeInsights.fastest.speedMps)
-    : "Keine Zeitdaten";
-  maxElevationValue.textContent = routeInsights.highest
-    ? formatElevationMeters(routeInsights.highest.ele)
-    : "-";
+  maxSpeedValue.textContent = routeInsights.fastest ? "In Naehe sichtbar" : "Keine Zeitdaten";
+  maxElevationValue.textContent = routeInsights.highest ? "Noch gesperrt" : "-";
   photoSpotCount.textContent = String(photoSpots.length);
+
+  maxSpeedRow?.classList.add("muted");
+  maxSpeedRow?.classList.remove("unlocked");
+  maxElevationRow?.classList.add("muted");
+  maxElevationRow?.classList.remove("unlocked");
 
   hideInsightEvent();
   insightPanel.classList.remove("hidden");
+}
+
+function setSpeedRowByProximity(isNear) {
+  if (!maxSpeedValue || !maxSpeedRow || !routeInsights?.fastest) {
+    return;
+  }
+
+  if (isNear) {
+    maxSpeedValue.textContent = formatSpeedKmh(routeInsights.fastest.speedMps);
+  } else {
+    maxSpeedValue.textContent = "In Naehe sichtbar";
+  }
+}
+
+function unlockInsight(kind) {
+  if (!routeInsights) {
+    return;
+  }
+
+  if (kind === "fastest") {
+    routeInsights.unlockedFastest = true;
+    maxSpeedRow?.classList.remove("muted");
+    maxSpeedRow?.classList.add("unlocked");
+    return;
+  }
+
+  if (kind === "highest") {
+    routeInsights.unlockedHighest = true;
+    if (routeInsights.highest) {
+      maxElevationValue.textContent = formatElevationMeters(routeInsights.highest.ele);
+    }
+    maxElevationRow?.classList.remove("muted");
+    maxElevationRow?.classList.add("unlocked");
+  }
+}
+
+function setHighlightMarkerUnlocked(kind, unlocked) {
+  const entry = highlightMarkers.find((item) => item.kind === kind);
+  if (!entry?.element) {
+    return;
+  }
+
+  entry.element.classList.toggle("locked", !unlocked);
+  entry.element.classList.toggle("unlocked", Boolean(unlocked));
+}
+
+function setPhotoMarkerUnlocked(spotId, unlocked) {
+  const entry = photoMarkers.find((item) => item.spotId === spotId);
+  if (!entry?.element) {
+    return;
+  }
+
+  entry.element.classList.toggle("locked", !unlocked);
+  entry.element.classList.toggle("unlocked", Boolean(unlocked));
 }
 
 function updatePhotoCount() {
@@ -347,11 +405,16 @@ function computeRouteInsights(points) {
     }
   }
 
-  return { highest, fastest };
+  return {
+    highest,
+    fastest,
+    unlockedFastest: false,
+    unlockedHighest: false,
+  };
 }
 
 function clearInsightMarkers() {
-  highlightMarkers.forEach((marker) => marker.remove());
+  highlightMarkers.forEach((entry) => entry.marker.remove());
   highlightMarkers = [];
 }
 
@@ -383,16 +446,23 @@ function createInsightMarker(type, point, label) {
   glyph.textContent = type === "speed" ? "⚡" : "▲";
   el.appendChild(glyph);
   el.title = label;
+  el.classList.add("locked");
 
-  const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+  const marker = new maplibregl.Marker({
+    element: el,
+    anchor: "bottom",
+    pitchAlignment: "map",
+    rotationAlignment: "map",
+  })
     .setLngLat([point.lon, point.lat])
     .addTo(map);
-  highlightMarkers.push(marker);
+  highlightMarkers.push({ marker, element: el, kind: type === "speed" ? "fastest" : "highest" });
 }
 
 function createPhotoSpotMarker(spot) {
   const markerEl = document.createElement("div");
   markerEl.className = "photo-spot-marker";
+  markerEl.classList.add("locked");
 
   const img = document.createElement("img");
   img.src = spot.url;
@@ -408,12 +478,17 @@ function createPhotoSpotMarker(spot) {
   `;
 
   const popup = new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml);
-  const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
+  const marker = new maplibregl.Marker({
+    element: markerEl,
+    anchor: "bottom",
+    pitchAlignment: "map",
+    rotationAlignment: "map",
+  })
     .setLngLat([spot.lon, spot.lat])
     .setPopup(popup)
     .addTo(map);
 
-  photoMarkers.push({ marker, popup, spotId: spot.id });
+  photoMarkers.push({ marker, popup, spotId: spot.id, element: markerEl });
 }
 
 function addPhotoSpotAt(lngLat, file) {
@@ -424,6 +499,7 @@ function addPhotoSpotAt(lngLat, file) {
     name: file.name || `Spot ${photoSpots.length + 1}`,
     url: URL.createObjectURL(file),
     routeIndex: -1,
+    unlocked: false,
   };
 
   if (routePoints.length >= 2) {
@@ -432,6 +508,7 @@ function addPhotoSpotAt(lngLat, file) {
 
   photoSpots.push(spot);
   createPhotoSpotMarker(spot);
+  setPhotoMarkerUnlocked(spot.id, false);
   updatePhotoCount();
   updateInsightsPanel();
 }
@@ -512,6 +589,10 @@ function computePhotoSlowdown(segmentIndex) {
   }
 
   return Math.max(0.42, factor);
+}
+
+function isNearIndex(segmentIndex, targetIndex, radius = PROXIMITY_VISIBLE_RADIUS) {
+  return Number.isInteger(targetIndex) && targetIndex >= 0 && Math.abs(segmentIndex - targetIndex) <= radius;
 }
 
 function buildAltitudePathData(points) {
@@ -1071,6 +1152,8 @@ function startAnimation() {
         const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
         const localT = scaled - segmentIndex;
 
+        setSpeedRowByProximity(isNearIndex(segmentIndex, routeInsights?.fastestRouteIndex));
+
         const current = interpolatePoint(
           activePoints[segmentIndex],
           activePoints[segmentIndex + 1],
@@ -1121,6 +1204,8 @@ function startAnimation() {
         if (!reachedHighlight.fastest && routeInsights?.fastest && routeInsights.fastestRouteIndex >= 0) {
           if (Math.abs(segmentIndex - routeInsights.fastestRouteIndex) <= 5) {
             reachedHighlight.fastest = true;
+            unlockInsight("fastest");
+            setHighlightMarkerUnlocked("fastest", true);
             showInsightEvent(`⚡ Schnellster Abschnitt: ${formatSpeedKmh(routeInsights.fastest.speedMps)}`);
           }
         }
@@ -1128,6 +1213,8 @@ function startAnimation() {
         if (!reachedHighlight.highest && routeInsights?.highest && routeInsights.highestRouteIndex >= 0) {
           if (Math.abs(segmentIndex - routeInsights.highestRouteIndex) <= 5) {
             reachedHighlight.highest = true;
+            unlockInsight("highest");
+            setHighlightMarkerUnlocked("highest", true);
             showInsightEvent(`⛰ Hoechster Punkt: ${formatElevationMeters(routeInsights.highest.ele)}`);
           }
         }
@@ -1138,6 +1225,8 @@ function startAnimation() {
           }
           if (Math.abs(segmentIndex - spot.routeIndex) <= 5) {
             reachedPhotoSpotIds.add(spot.id);
+            spot.unlocked = true;
+            setPhotoMarkerUnlocked(spot.id, true);
             showInsightEvent(`📷 Foto-Spot: ${spot.name}`);
           }
         }
