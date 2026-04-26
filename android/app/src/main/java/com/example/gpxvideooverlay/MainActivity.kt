@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.example.gpxvideooverlay.data.ActivityItem
 import com.example.gpxvideooverlay.data.ActivityType
 import com.example.gpxvideooverlay.data.SampleRepository
@@ -79,7 +80,8 @@ private enum class AppTab(val label: String, val icon: androidx.compose.ui.graph
 private fun OverlayApp() {
     var activeTab by remember { mutableStateOf(AppTab.Library) }
     var selectedFilter by remember { mutableStateOf<ActivityType?>(null) }
-    val repository = remember { SampleRepository() }
+    val context = LocalContext.current.applicationContext
+    val repository = remember(context) { SampleRepository(context) }
     val activities by repository.activities
 
     Scaffold(
@@ -123,7 +125,11 @@ private fun OverlayApp() {
                     onFilterSelected = { selectedFilter = it }
                 )
 
-                AppTab.Import -> ImportScreen()
+                AppTab.Import -> ImportScreen(
+                    onConnectStrava = { repository.importDemoStravaActivity() },
+                    onImportFile = { repository.importDemoFileActivity() },
+                    onAutoAssignPhotos = { repository.importDemoPhotoMatchedActivity() }
+                )
                 AppTab.Editor -> EditorScreen(activities.firstOrNull())
                 AppTab.Export -> ExportScreen()
             }
@@ -208,14 +214,18 @@ private fun ActivityCard(activity: ActivityItem) {
 }
 
 @Composable
-private fun ImportScreen() {
+private fun ImportScreen(
+    onConnectStrava: () -> Unit,
+    onImportFile: () -> Unit,
+    onAutoAssignPhotos: () -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Import & Sync", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                AssistChip(onClick = {}, label = { Text("Strava verbinden") }, leadingIcon = { Icon(Icons.Filled.Sync, null) })
-                AssistChip(onClick = {}, label = { Text("Datei importieren") }, leadingIcon = { Icon(Icons.Filled.FolderOpen, null) })
-                AssistChip(onClick = {}, label = { Text("Fotos automatisch zuordnen") }, leadingIcon = { Icon(Icons.Filled.Image, null) })
+                AssistChip(onClick = onConnectStrava, label = { Text("Strava verbinden") }, leadingIcon = { Icon(Icons.Filled.Sync, null) })
+                AssistChip(onClick = onImportFile, label = { Text("Datei importieren") }, leadingIcon = { Icon(Icons.Filled.FolderOpen, null) })
+                AssistChip(onClick = onAutoAssignPhotos, label = { Text("Fotos automatisch zuordnen") }, leadingIcon = { Icon(Icons.Filled.Image, null) })
             }
         }
     }
