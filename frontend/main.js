@@ -224,6 +224,171 @@ function parseTimeMs(value) {
   return Number.isFinite(timeMs) ? timeMs : null;
 }
 
+function parseExifDateFromJpeg(arrayBuffer) {
+  const view = new DataView(arrayBuffer);
+  if (view.byteLength < 4 || view.getUint16(0, false) !== 0xffd8) {
+    return null;
+  }
+
+  let offset = 2;
+  while (offset + 4 < view.byteLength) {
+    const marker = view.getUint16(offset, false);
+    offset += 2;
+
+    if (marker === 0xffda || marker === 0xffd9) {
+      break;
+    }
+
+    const segmentLength = view.getUint16(offset, false);
+    if (!Number.isFinite(segmentLength) || segmentLength < 2) {
+      return null;
+    }
+
+    if (marker === 0xffe1 && segmentLength >= 10) {
+      const exifStart = offset + 2;
+      const exifHeader = [
+        view.getUint8(exifStart),
+        view.getUint8(exifStart + 1),
+        view.getUint8(exifStart + 2),
+        view.getUint8(exifStart + 3),
+      ];
+
+      if (String.fromCharCode(...exifHeader) === "Exif") {
+        const tiffOffset = exifStart + 6;
+        const isLittleEndian = view.getUint16(tiffOffset, false) === 0x4949;
+        const read16 = (pos) => view.getUint16(pos, isLittleEndian);
+        const read32 = (pos) => view.getUint32(pos, isLittleEndian);
+        const firstIfdRel = read32(tiffOffset + 4);
+        const firstIfd = tiffOffset + firstIfdRel;
+
+        if (firstIfd + 2 >= view.byteLength) {
+          return null;
+        }
+
+        const entryCount = read16(firstIfd);
+        let exifIfdRel = null;
+        for (let i = 0; i < entryCount; i += 1) {
+          const entry = firstIfd + 2 + i * 12;
+          if (entry + 12 > view.byteLength) {
+            break;
+          }
+          const tag = read16(entry);
+          if (tag === 0x8769) {
+            exifIfdRel = read32(entry + 8);
+            break;
+          }
+        }
+
+        if (!Number.isFinite(exifIfdRel)) {
+          return null;
+        }
+
+        const exifIfd = tiffOffset + exifIfdRel;
+        if (exifIfd + 2 >= view.byteLength) {
+          return null;
+        }
+
+        const exifEntryCount = read16(exifIfd);
+        for (let i = 0; i < exifEntryCount; i += 1) {
+          const entry = exifIfd + 2 + i * 12;
+          if (entry + 12 > view.byteLength) {
+            break;
+          }
+          const tag = read16(entry);
+          if (tag !== 0x9003 && tag !== 0x0132) {
+            continue;
+          }
+
+          const count = read32(entry + 4);
+          const valueOffsetRel = read32(entry + 8);
+          const textOffset = tiffOffset + valueOffsetRel;
+          if (textOffset + count > view.byteLength || count < 8) {
+            continue;
+          }
+
+          let text = "";
+          for (let c = 0; c < count; c += 1) {
+            const code = view.getUint8(textOffset + c);
+            if (code === 0) {
+              break;
+            }
+            text += String.fromCharCode(code);
+          }
+
+          const match = text.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+          if (!match) {
+            continue;
+          }
+
+          const [, y, m, d, hh, mm, ss] = match;
+          const utcMs = Date.UTC(
+            Number(y),
+            Number(m) - 1,
+            Number(d),
+            Number(hh),
+            Number(mm),
+            Number(ss)
+          );
+
+          return Number.isFinite(utcMs) ? utcMs : null;
+        }
+      }
+    }
+
+    offset += segmentLength;
+  }
+
+  return null;
+}
+
+async function extractPhotoTimestampMs(file) {
+  if (!file) {
+    return null;
+  }
+
+  const isJpeg = /jpe?g/i.test(file.type || "") || /\.jpe?g$/i.test(file.name || "");
+  if (isJpeg) {
+    try {
+      const buffer = await file.arrayBuffer();
+      const exifMs = parseExifDateFromJpeg(buffer);
+      if (Number.isFinite(exifMs)) {
+        return exifMs;
+      }
+    } catch {
+      // ignore and fall back
+    }
+  }
+
+  return Number.isFinite(file.lastModified) ? file.lastModified : null;
+}
+
+function findRoutePointByTimestampMs(targetMs) {
+  if (!Number.isFinite(targetMs) || routePoints.length < 2) {
+    return null;
+  }
+
+  let bestPoint = null;
+  let bestDelta = Number.POSITIVE_INFINITY;
+
+  for (const point of routePoints) {
+    const pointMs = parseTimeMs(point.time);
+    if (!Number.isFinite(pointMs)) {
+      continue;
+    }
+    const delta = Math.abs(pointMs - targetMs);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestPoint = point;
+    }
+  }
+
+  return bestPoint;
+}
+
+function hasRouteTimeData() {
+  return routePoints.some((p) => Number.isFinite(parseTimeMs(p.time)));
+}
+
 function formatSpeedKmh(valueMps) {
   if (!Number.isFinite(valueMps) || valueMps <= 0) {
     return "-";
@@ -268,6 +433,11 @@ function updateInsightsPanel() {
   }
 
   maxSpeedValue.textContent = routeInsights.fastest ? "In Naehe sichtbar" : "Keine Zeitdaten";
+  if (routeInsights.fastest) {
+    maxSpeedRow?.classList.add("hidden-row");
+  } else {
+    maxSpeedRow?.classList.remove("hidden-row");
+  }
   maxElevationValue.textContent = routeInsights.highest ? "Noch gesperrt" : "-";
   photoSpotCount.textContent = String(photoSpots.length);
 
@@ -286,10 +456,22 @@ function setSpeedRowByProximity(isNear) {
   }
 
   if (isNear) {
+    maxSpeedRow.classList.remove("hidden-row");
     maxSpeedValue.textContent = formatSpeedKmh(routeInsights.fastest.speedMps);
   } else {
+    maxSpeedRow.classList.add("hidden-row");
     maxSpeedValue.textContent = "In Naehe sichtbar";
   }
+}
+
+function triggerUnlockPulse(element) {
+  if (!element) {
+    return;
+  }
+  element.classList.remove("pulse-on-unlock");
+  // Force reflow so repeated unlock pulses can retrigger reliably.
+  void element.offsetWidth;
+  element.classList.add("pulse-on-unlock");
 }
 
 function unlockInsight(kind) {
@@ -320,8 +502,14 @@ function setHighlightMarkerUnlocked(kind, unlocked) {
     return;
   }
 
+  const wasUnlocked = entry.element.classList.contains("unlocked");
+
   entry.element.classList.toggle("locked", !unlocked);
   entry.element.classList.toggle("unlocked", Boolean(unlocked));
+
+  if (unlocked && !wasUnlocked) {
+    triggerUnlockPulse(entry.element);
+  }
 }
 
 function setPhotoMarkerUnlocked(spotId, unlocked) {
@@ -330,8 +518,14 @@ function setPhotoMarkerUnlocked(spotId, unlocked) {
     return;
   }
 
+  const wasUnlocked = entry.element.classList.contains("unlocked");
+
   entry.element.classList.toggle("locked", !unlocked);
   entry.element.classList.toggle("unlocked", Boolean(unlocked));
+
+  if (unlocked && !wasUnlocked) {
+    triggerUnlockPulse(entry.element);
+  }
 }
 
 function updatePhotoCount() {
@@ -451,8 +645,8 @@ function createInsightMarker(type, point, label) {
   const marker = new maplibregl.Marker({
     element: el,
     anchor: "bottom",
-    pitchAlignment: "map",
-    rotationAlignment: "map",
+    pitchAlignment: "viewport",
+    rotationAlignment: "viewport",
   })
     .setLngLat([point.lon, point.lat])
     .addTo(map);
@@ -481,8 +675,8 @@ function createPhotoSpotMarker(spot) {
   const marker = new maplibregl.Marker({
     element: markerEl,
     anchor: "bottom",
-    pitchAlignment: "map",
-    rotationAlignment: "map",
+    pitchAlignment: "viewport",
+    rotationAlignment: "viewport",
   })
     .setLngLat([spot.lon, spot.lat])
     .setPopup(popup)
@@ -1424,15 +1618,30 @@ formatSelect.addEventListener("change", () => {
   setStatus(`Format umgestellt auf ${FORMAT_CONFIG[selected].label}.`);
 });
 
-photoInput.addEventListener("change", (event) => {
+photoInput.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   if (!file) {
     return;
   }
 
+  const photoTimestampMs = await extractPhotoTimestampMs(file);
+  const autoPoint = hasRouteTimeData() && Number.isFinite(photoTimestampMs)
+    ? findRoutePointByTimestampMs(photoTimestampMs)
+    : null;
+
+  if (autoPoint) {
+    addPhotoSpotAt({ lng: autoPoint.lon, lat: autoPoint.lat }, file);
+    const dateText = new Date(photoTimestampMs).toLocaleString("de-AT");
+    setStatus(`Foto-Spot automatisch per Zeitstempel gesetzt (${dateText}).`);
+    pendingPhotoFile = null;
+    photoInput.value = "";
+    map.getCanvas().style.cursor = "";
+    return;
+  }
+
   pendingPhotoFile = file;
   map.getCanvas().style.cursor = "crosshair";
-  setStatus(`Bild bereit: ${file.name}. Klicke jetzt auf die Karte, um den Spot zu setzen.`);
+  setStatus(`Bild bereit: ${file.name}. Kein passender Zeitstempel gefunden, bitte Spot auf der Karte setzen.`);
 });
 
 map.on("click", (event) => {

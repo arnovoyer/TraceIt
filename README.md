@@ -51,6 +51,7 @@ Wichtig:
 - Oben links wird ein Höhenprofil aus der GPX angezeigt: bereits gefahrene Strecke farbig, restlicher Teil transparent.
 - Highlights werden automatisch markiert: schnellster Abschnitt (⚡) und höchster Punkt (▲). Die Kamera verlangsamt dort kurz.
 - Foto-Spots: Mit `Bild-Spot` ein Bild wählen und dann auf die Karte klicken. Der Spot erscheint als Marker und wird in der Fahrt kurz eingeblendet.
+- Foto-Zeitpunkt-Erkennung: Wenn das Bild einen EXIF-Zeitstempel hat und die GPX Zeitdaten enthält, wird der Foto-Spot automatisch an den passenden Routenzeitpunkt gesetzt (sonst manueller Klick auf die Karte).
 
 ## 3b) Typischer Fehler: "NetworkError when attempting to fetch resource"
 
