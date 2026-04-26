@@ -38,6 +38,7 @@ let highlightMarkers = [];
 let photoSpots = [];
 let photoMarkers = [];
 let pendingPhotoFile = null;
+let routeIconLayerReady = false;
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
@@ -160,6 +161,10 @@ map.on("load", () => {
       "sky-atmosphere-sun-intensity": 10,
     },
   });
+
+  ensureMarkerImages();
+  ensureMarkerLayers();
+  syncMarkerLayers();
 });
 
 function computeBearing(a, b) {
@@ -215,6 +220,169 @@ function createPointFeature(lon, lat, properties = {}) {
     },
     properties,
   };
+}
+
+function createFeatureCollection(features = []) {
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+function createSvgDataUrl(svg) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function makeMarkerSvg(kind) {
+  if (kind === "photo") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#f8fafc"/>
+          </linearGradient>
+        </defs>
+        <circle cx="32" cy="30" r="20" fill="#facc15"/>
+        <circle cx="32" cy="30" r="14" fill="url(#g)"/>
+        <path d="M32 58 L23 41 H41 Z" fill="#facc15"/>
+        <rect x="22" y="22" width="20" height="14" rx="2.5" fill="#6b7280"/>
+        <circle cx="32" cy="29" r="5" fill="#d1d5db"/>
+      </svg>
+    `;
+  }
+
+  if (kind === "speed") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+        <circle cx="32" cy="30" r="20" fill="#facc15"/>
+        <circle cx="32" cy="30" r="14" fill="#ffffff"/>
+        <path d="M32 58 L23 41 H41 Z" fill="#facc15"/>
+        <path d="M27 34 L31 27 L29 27 L33 21 L32 29 L35 29 Z" fill="#1f2937"/>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+      <circle cx="32" cy="30" r="20" fill="#facc15"/>
+      <circle cx="32" cy="30" r="14" fill="#ffffff"/>
+      <path d="M32 58 L23 41 H41 Z" fill="#facc15"/>
+      <path d="M25 33 L32 22 L39 33 Z" fill="#1f2937"/>
+    </svg>
+  `;
+}
+
+function ensureMarkerImages() {
+  const specs = [
+    ["highlight-speed", makeMarkerSvg("speed")],
+    ["highlight-elevation", makeMarkerSvg("elevation")],
+    ["photo-spot", makeMarkerSvg("photo")],
+  ];
+
+  for (const [name, svg] of specs) {
+    if (!map.hasImage(name)) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = createSvgDataUrl(svg);
+      map.addImage(name, image);
+    }
+  }
+}
+
+function ensureMarkerLayers() {
+  if (!map.getSource("highlightPoints")) {
+    map.addSource("highlightPoints", {
+      type: "geojson",
+      data: createFeatureCollection([]),
+    });
+  }
+
+  if (!map.getLayer("highlightPointsLayer")) {
+    map.addLayer({
+      id: "highlightPointsLayer",
+      type: "symbol",
+      source: "highlightPoints",
+      layout: {
+        "icon-image": ["match", ["get", "kind"], "speed", "highlight-speed", "highlight-elevation"],
+        "icon-size": 0.78,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "bottom",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "viewport",
+      },
+      paint: {
+        "icon-opacity": ["case", ["==", ["get", "unlocked"], true], 1, 0.42],
+      },
+    });
+  }
+
+  if (!map.getSource("photoPoints")) {
+    map.addSource("photoPoints", {
+      type: "geojson",
+      data: createFeatureCollection([]),
+    });
+  }
+
+  if (!map.getLayer("photoPointsLayer")) {
+    map.addLayer({
+      id: "photoPointsLayer",
+      type: "symbol",
+      source: "photoPoints",
+      layout: {
+        "icon-image": "photo-spot",
+        "icon-size": 0.72,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "bottom",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "viewport",
+      },
+      paint: {
+        "icon-opacity": ["case", ["==", ["get", "unlocked"], true], 1, 0.42],
+      },
+    });
+  }
+
+  routeIconLayerReady = true;
+}
+
+function syncMarkerLayers() {
+  if (!routeIconLayerReady) {
+    return;
+  }
+
+  const highlightFeatures = [];
+  if (routeInsights?.fastest) {
+    highlightFeatures.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [routeInsights.fastest.lon, routeInsights.fastest.lat] },
+      properties: { kind: "speed", unlocked: Boolean(routeInsights.unlockedFastest) },
+    });
+  }
+  if (routeInsights?.highest) {
+    highlightFeatures.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [routeInsights.highest.lon, routeInsights.highest.lat] },
+      properties: { kind: "elevation", unlocked: Boolean(routeInsights.unlockedHighest) },
+    });
+  }
+
+  const photoFeatures = photoSpots.map((spot) => ({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [spot.lon, spot.lat] },
+    properties: { id: spot.id, unlocked: Boolean(spot.unlocked), name: spot.name },
+  }));
+
+  const highlightSource = map.getSource("highlightPoints");
+  const photoSource = map.getSource("photoPoints");
+  if (highlightSource) {
+    highlightSource.setData(createFeatureCollection(highlightFeatures));
+  }
+  if (photoSource) {
+    photoSource.setData(createFeatureCollection(photoFeatures));
+  }
 }
 
 function parseTimeMs(value) {
@@ -523,6 +691,7 @@ function unlockInsight(kind) {
     routeInsights.unlockedFastest = true;
     maxSpeedRow?.classList.remove("muted");
     maxSpeedRow?.classList.add("unlocked");
+    syncMarkerLayers();
     return;
   }
 
@@ -533,38 +702,36 @@ function unlockInsight(kind) {
     }
     maxElevationRow?.classList.remove("muted");
     maxElevationRow?.classList.add("unlocked");
+    syncMarkerLayers();
   }
 }
 
 function setHighlightMarkerUnlocked(kind, unlocked) {
-  const entry = highlightMarkers.find((item) => item.kind === kind);
-  if (!entry?.element) {
-    return;
+  const wasUnlocked = kind === "fastest" ? routeInsights?.unlockedFastest : routeInsights?.unlockedHighest;
+  if (kind === "fastest") {
+    routeInsights.unlockedFastest = Boolean(unlocked);
+  } else if (kind === "highest") {
+    routeInsights.unlockedHighest = Boolean(unlocked);
   }
 
-  const wasUnlocked = entry.element.classList.contains("unlocked");
-
-  entry.element.classList.toggle("locked", !unlocked);
-  entry.element.classList.toggle("unlocked", Boolean(unlocked));
-
+  syncMarkerLayers();
   if (unlocked && !wasUnlocked) {
-    triggerUnlockPulse(entry.element);
+    triggerUnlockPulse(kind === "fastest" ? maxSpeedRow : maxElevationRow);
   }
 }
 
 function setPhotoMarkerUnlocked(spotId, unlocked) {
-  const entry = photoMarkers.find((item) => item.spotId === spotId);
-  if (!entry?.element) {
+  const spot = photoSpots.find((item) => item.id === spotId);
+  if (!spot) {
     return;
   }
 
-  const wasUnlocked = entry.element.classList.contains("unlocked");
-
-  entry.element.classList.toggle("locked", !unlocked);
-  entry.element.classList.toggle("unlocked", Boolean(unlocked));
+  const wasUnlocked = Boolean(spot.unlocked);
+  spot.unlocked = Boolean(unlocked);
+  syncMarkerLayers();
 
   if (unlocked && !wasUnlocked) {
-    triggerUnlockPulse(entry.element);
+    triggerUnlockPulse(photoRow);
   }
 }
 
@@ -648,12 +815,10 @@ function computeRouteInsights(points) {
 }
 
 function clearInsightMarkers() {
-  highlightMarkers.forEach((entry) => entry.marker.remove());
   highlightMarkers = [];
 }
 
 function clearPhotoMarkers() {
-  photoMarkers.forEach((entry) => entry.marker.remove());
   photoMarkers = [];
 }
 
@@ -669,60 +834,19 @@ function clearPhotoSpots() {
 }
 
 function createInsightMarker(type, point, label) {
-  if (!point) {
+  if (!point || !routeIconLayerReady) {
     return;
   }
 
-  const el = document.createElement("div");
-  el.className = `highlight-marker ${type}`;
-  const glyph = document.createElement("span");
-  glyph.className = "marker-glyph";
-  glyph.textContent = type === "speed" ? "⚡" : "▲";
-  el.appendChild(glyph);
-  el.title = label;
-  el.classList.add("locked");
-
-  const marker = new maplibregl.Marker({
-    element: el,
-    anchor: "bottom",
-    pitchAlignment: "viewport",
-    rotationAlignment: "viewport",
-  })
-    .setLngLat([point.lon, point.lat])
-    .addTo(map);
-  highlightMarkers.push({ marker, element: el, kind: type === "speed" ? "fastest" : "highest" });
+  highlightMarkers.push({ kind: type === "speed" ? "fastest" : "highest", point, label });
 }
 
 function createPhotoSpotMarker(spot) {
-  const markerEl = document.createElement("div");
-  markerEl.className = "photo-spot-marker";
-  markerEl.classList.add("locked");
+  if (!routeIconLayerReady) {
+    return;
+  }
 
-  const img = document.createElement("img");
-  img.src = spot.url;
-  img.alt = spot.name;
-  markerEl.appendChild(img);
-
-  const popupHtml = `
-    <div class="photo-popup">
-      <img src="${spot.url}" alt="${spot.name}">
-      <strong>${spot.name}</strong>
-      <span>Foto-Spot</span>
-    </div>
-  `;
-
-  const popup = new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml);
-  const marker = new maplibregl.Marker({
-    element: markerEl,
-    anchor: "bottom",
-    pitchAlignment: "viewport",
-    rotationAlignment: "viewport",
-  })
-    .setLngLat([spot.lon, spot.lat])
-    .setPopup(popup)
-    .addTo(map);
-
-  photoMarkers.push({ marker, popup, spotId: spot.id, element: markerEl });
+  photoMarkers.push({ spotId: spot.id, point: spot });
 }
 
 function addPhotoSpotAt(lngLat, file) {
@@ -742,32 +866,14 @@ function addPhotoSpotAt(lngLat, file) {
 
   photoSpots.push(spot);
   createPhotoSpotMarker(spot);
-  setPhotoMarkerUnlocked(spot.id, false);
   updatePhotoCount();
   updateInsightsPanel();
+  syncMarkerLayers();
 }
 
 function renderInsightMarkers() {
   clearInsightMarkers();
-  if (!routeInsights) {
-    return;
-  }
-
-  if (routeInsights.fastest) {
-    createInsightMarker(
-      "speed",
-      routeInsights.fastest,
-      `Schnellster Punkt: ${formatSpeedKmh(routeInsights.fastest.speedMps)}`
-    );
-  }
-
-  if (routeInsights.highest) {
-    createInsightMarker(
-      "elevation",
-      routeInsights.highest,
-      `Hoechster Punkt: ${formatElevationMeters(routeInsights.highest.ele)}`
-    );
-  }
+  syncMarkerLayers();
 }
 
 function computeHighlightSlowdown(segmentIndex) {
