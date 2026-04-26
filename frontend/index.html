@@ -33,6 +33,20 @@
 
       <section id="mapStage">
         <div id="mapFrame" class="landscape">
+          <aside id="insightPanel" class="insight-panel hidden" aria-live="polite">
+            <div class="insight-row">
+              <span class="insight-icon" aria-hidden="true">⚡</span>
+              <span class="insight-label">Max. Speed</span>
+              <strong id="maxSpeedValue">-</strong>
+            </div>
+            <div class="insight-row">
+              <span class="insight-icon" aria-hidden="true">⛰</span>
+              <span class="insight-label">Hoechster Punkt</span>
+              <strong id="maxElevationValue">-</strong>
+            </div>
+            <p id="insightEvent" class="insight-event hidden"></p>
+          </aside>
+
           <div id="altitudeOverlay" class="altitude-overlay hidden" aria-label="Hoehenprofil">
             <svg id="altitudeSvg" viewBox="0 0 320 96" preserveAspectRatio="none">
               <defs>

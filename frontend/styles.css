@@ -173,6 +173,94 @@ input[type="number"]::selection {
   height: 100%;
 }
 
+.insight-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 8;
+  width: min(320px, calc(100% - 32px));
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: linear-gradient(160deg, rgba(10, 22, 36, 0.82), rgba(11, 28, 44, 0.7));
+  backdrop-filter: blur(7px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.insight-panel.hidden {
+  display: none;
+}
+
+.insight-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.84rem;
+}
+
+.insight-row + .insight-row {
+  margin-top: 8px;
+}
+
+.insight-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  color: #ffe081;
+  font-size: 0.8rem;
+}
+
+.insight-label {
+  color: rgba(236, 243, 255, 0.85);
+  letter-spacing: 0.2px;
+}
+
+#maxSpeedValue,
+#maxElevationValue {
+  color: #ffdf7a;
+  font-size: 0.88rem;
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.2);
+}
+
+.insight-event {
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(251, 191, 36, 0.2);
+  font-size: 0.82rem;
+  color: #fff0b2;
+  letter-spacing: 0.2px;
+}
+
+.insight-event.hidden {
+  display: none;
+}
+
+.highlight-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #fff9d7;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(251, 191, 36, 0.14);
+}
+
+.highlight-marker.speed {
+  background: radial-gradient(circle at 30% 30%, #fcd34d, #f59e0b 70%);
+}
+
+.highlight-marker.elevation {
+  background: radial-gradient(circle at 30% 30%, #fde68a, #d97706 72%);
+}
+
 .altitude-overlay {
   position: absolute;
   top: 16px;
@@ -217,4 +305,17 @@ input[type="number"]::selection {
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.3));
+}
+
+@media (max-width: 760px) {
+  .insight-panel {
+    top: auto;
+    bottom: 14px;
+    right: 14px;
+    width: min(92%, 340px);
+  }
+
+  .altitude-overlay {
+    width: min(88%, 340px);
+  }
 }

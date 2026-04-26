@@ -18,17 +18,25 @@ const altitudeAreaDone = document.getElementById("altitudeAreaDone");
 const altitudeLineBg = document.getElementById("altitudeLineBg");
 const altitudeLineDone = document.getElementById("altitudeLineDone");
 const altitudeClipRect = document.getElementById("altitudeClipRect");
+const insightPanel = document.getElementById("insightPanel");
+const maxSpeedValue = document.getElementById("maxSpeedValue");
+const maxElevationValue = document.getElementById("maxElevationValue");
+const insightEvent = document.getElementById("insightEvent");
 
 let routePoints = [];
 let cameraPoints = [];
 let animationFrameId = null;
 let isRecording = false;
 let altitudeOverlayState = null;
+let routeInsights = null;
+let highlightMarkers = [];
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
 const MAX_ALTITUDE_POINTS = 700;
 const TRAIL_UPDATE_INTERVAL_MS = 16;
+const HIGHLIGHT_SLOWDOWN_RADIUS = 55;
+const HIGHLIGHT_SLOWDOWN_STRENGTH = 0.56;
 
 const CAMERA_CONFIG = {
   pitch: 74,
@@ -196,6 +204,211 @@ function createPointFeature(lon, lat, properties = {}) {
     },
     properties,
   };
+}
+
+function parseTimeMs(value) {
+  if (!value) {
+    return null;
+  }
+  const timeMs = new Date(value).getTime();
+  return Number.isFinite(timeMs) ? timeMs : null;
+}
+
+function formatSpeedKmh(valueMps) {
+  if (!Number.isFinite(valueMps) || valueMps <= 0) {
+    return "-";
+  }
+  return `${(valueMps * 3.6).toFixed(1)} km/h`;
+}
+
+function formatElevationMeters(valueM) {
+  if (!Number.isFinite(valueM)) {
+    return "-";
+  }
+  return `${Math.round(valueM)} m`;
+}
+
+function hideInsightEvent() {
+  if (!insightEvent) {
+    return;
+  }
+  insightEvent.classList.add("hidden");
+  insightEvent.textContent = "";
+}
+
+function showInsightEvent(text) {
+  if (!insightEvent) {
+    return;
+  }
+  insightEvent.textContent = text;
+  insightEvent.classList.remove("hidden");
+}
+
+function updateInsightsPanel() {
+  if (!insightPanel || !maxSpeedValue || !maxElevationValue) {
+    return;
+  }
+
+  if (!routeInsights) {
+    insightPanel.classList.add("hidden");
+    maxSpeedValue.textContent = "-";
+    maxElevationValue.textContent = "-";
+    hideInsightEvent();
+    return;
+  }
+
+  maxSpeedValue.textContent = routeInsights.fastest
+    ? formatSpeedKmh(routeInsights.fastest.speedMps)
+    : "Keine Zeitdaten";
+  maxElevationValue.textContent = routeInsights.highest
+    ? formatElevationMeters(routeInsights.highest.ele)
+    : "-";
+
+  hideInsightEvent();
+  insightPanel.classList.remove("hidden");
+}
+
+function findNearestPointIndex(points, targetPoint) {
+  if (!targetPoint || points.length === 0) {
+    return -1;
+  }
+
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < points.length; i += 1) {
+    const dist = distanceMeters(points[i], targetPoint);
+    if (dist < bestDistance) {
+      bestDistance = dist;
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex;
+}
+
+function computeRouteInsights(points) {
+  if (!points || points.length < 2) {
+    return null;
+  }
+
+  let highest = null;
+  for (let i = 0; i < points.length; i += 1) {
+    const point = points[i];
+    if (!Number.isFinite(point.ele)) {
+      continue;
+    }
+    if (!highest || point.ele > highest.ele) {
+      highest = { ...point, index: i };
+    }
+  }
+
+  let fastest = null;
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1];
+    const current = points[i];
+    const prevMs = parseTimeMs(prev.time);
+    const currMs = parseTimeMs(current.time);
+    if (prevMs === null || currMs === null) {
+      continue;
+    }
+
+    const dtSec = (currMs - prevMs) / 1000;
+    if (!Number.isFinite(dtSec) || dtSec <= 0) {
+      continue;
+    }
+
+    const distM = distanceMeters(prev, current);
+    const speedMps = distM / dtSec;
+    if (!Number.isFinite(speedMps) || speedMps <= 0) {
+      continue;
+    }
+
+    if (!fastest || speedMps > fastest.speedMps) {
+      fastest = {
+        ...current,
+        index: i,
+        speedMps,
+      };
+    }
+  }
+
+  return { highest, fastest };
+}
+
+function clearInsightMarkers() {
+  highlightMarkers.forEach((marker) => marker.remove());
+  highlightMarkers = [];
+}
+
+function createInsightMarker(type, point, label) {
+  if (!point) {
+    return;
+  }
+
+  const el = document.createElement("div");
+  el.className = `highlight-marker ${type}`;
+  el.textContent = type === "speed" ? "⚡" : "⛰";
+  el.title = label;
+
+  const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+    .setLngLat([point.lon, point.lat])
+    .addTo(map);
+  highlightMarkers.push(marker);
+}
+
+function renderInsightMarkers() {
+  clearInsightMarkers();
+  if (!routeInsights) {
+    return;
+  }
+
+  if (routeInsights.fastest) {
+    createInsightMarker(
+      "speed",
+      routeInsights.fastest,
+      `Schnellster Punkt: ${formatSpeedKmh(routeInsights.fastest.speedMps)}`
+    );
+  }
+
+  if (routeInsights.highest) {
+    createInsightMarker(
+      "elevation",
+      routeInsights.highest,
+      `Hoechster Punkt: ${formatElevationMeters(routeInsights.highest.ele)}`
+    );
+  }
+}
+
+function computeHighlightSlowdown(segmentIndex) {
+  if (!routeInsights) {
+    return 1;
+  }
+
+  const indices = [];
+  if (Number.isInteger(routeInsights.fastestRouteIndex) && routeInsights.fastestRouteIndex >= 0) {
+    indices.push(routeInsights.fastestRouteIndex);
+  }
+  if (Number.isInteger(routeInsights.highestRouteIndex) && routeInsights.highestRouteIndex >= 0) {
+    indices.push(routeInsights.highestRouteIndex);
+  }
+
+  if (indices.length === 0) {
+    return 1;
+  }
+
+  let factor = 1;
+  for (const idx of indices) {
+    const distanceIdx = Math.abs(segmentIndex - idx);
+    if (distanceIdx > HIGHLIGHT_SLOWDOWN_RADIUS) {
+      continue;
+    }
+
+    const proximity = 1 - distanceIdx / HIGHLIGHT_SLOWDOWN_RADIUS;
+    const localFactor = 1 - proximity * HIGHLIGHT_SLOWDOWN_STRENGTH;
+    factor = Math.min(factor, localFactor);
+  }
+
+  return Math.max(0.38, factor);
 }
 
 function buildAltitudePathData(points) {
@@ -489,6 +702,8 @@ function addHelicopterOffset(point, bearingDeg) {
 }
 
 function clearExistingRoute() {
+  clearInsightMarkers();
+
   if (map.getLayer("routeHeadGlow")) {
     map.removeLayer("routeHeadGlow");
   }
@@ -651,6 +866,19 @@ async function applyParsedGpxData(data) {
   const sampledPoints = sanitizeAndSamplePoints(data.points);
   routePoints = densifyRoutePoints(sampledPoints, 10);
   cameraPoints = smoothRoutePoints(routePoints, 8);
+  routeInsights = computeRouteInsights(sampledPoints);
+  if (routeInsights?.fastest) {
+    routeInsights.fastestRouteIndex = findNearestPointIndex(routePoints, routeInsights.fastest);
+  } else {
+    routeInsights.fastestRouteIndex = -1;
+  }
+  if (routeInsights?.highest) {
+    routeInsights.highestRouteIndex = findNearestPointIndex(routePoints, routeInsights.highest);
+  } else {
+    routeInsights.highestRouteIndex = -1;
+  }
+
+  updateInsightsPanel();
   renderAltitudeOverlay(sampledPoints);
 
   if (!map.isStyleLoaded()) {
@@ -658,6 +886,7 @@ async function applyParsedGpxData(data) {
   }
 
   drawRouteLine();
+  renderInsightMarkers();
   fitMapToRoute();
   await waitForMapIdle(450);
   await prewarmRouteTiles();
@@ -681,6 +910,7 @@ function stopAnimation() {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
+  hideInsightEvent();
 }
 
 function startAnimation() {
@@ -699,13 +929,18 @@ function startAnimation() {
     const cfg = getActiveCameraConfig();
     const segmentCount = activePoints.length - 1;
     const startTime = performance.now();
-    const hardStopTime = startTime + durationMs + 3000;
+    const hardStopTime = startTime + Math.max(durationMs + 3000, durationMs * 1.9);
     let smoothedBearing = null;
     let smoothedCenter = null;
     let lastFrameAt = startTime;
+    let virtualElapsed = 0;
     let lastDrawnSegment = 0;
     let lastTrailUpdateAt = 0;
     const trailCoords = [[routePoints[0].lon, routePoints[0].lat]];
+    const reachedHighlight = {
+      fastest: false,
+      highest: false,
+    };
 
     resetAnimatedRouteLine();
     updateRouteHead(routePoints[0], 0);
@@ -713,11 +948,17 @@ function startAnimation() {
 
     const animate = (now) => {
       try {
-        const elapsed = now - startTime;
         const dtMs = Math.max(1, now - lastFrameAt);
         lastFrameAt = now;
         const timedOut = now >= hardStopTime;
-        const progress = timedOut ? 1 : Math.min(1, Math.max(0, elapsed / durationMs));
+
+        const progressBefore = Math.min(1, Math.max(0, virtualElapsed / durationMs));
+        const scaledBefore = progressBefore * segmentCount;
+        const segmentBefore = Math.min(segmentCount - 1, Math.floor(scaledBefore));
+        const speedFactor = computeHighlightSlowdown(segmentBefore);
+        virtualElapsed += dtMs * speedFactor;
+
+        const progress = timedOut ? 1 : Math.min(1, Math.max(0, virtualElapsed / durationMs));
         updateAltitudeOverlayProgress(progress);
 
         const scaled = progress * segmentCount;
@@ -771,6 +1012,20 @@ function startAnimation() {
           lastDrawnSegment = segmentIndex;
         }
 
+        if (!reachedHighlight.fastest && routeInsights?.fastest && routeInsights.fastestRouteIndex >= 0) {
+          if (Math.abs(segmentIndex - routeInsights.fastestRouteIndex) <= 5) {
+            reachedHighlight.fastest = true;
+            showInsightEvent(`⚡ Schnellster Abschnitt: ${formatSpeedKmh(routeInsights.fastest.speedMps)}`);
+          }
+        }
+
+        if (!reachedHighlight.highest && routeInsights?.highest && routeInsights.highestRouteIndex >= 0) {
+          if (Math.abs(segmentIndex - routeInsights.highestRouteIndex) <= 5) {
+            reachedHighlight.highest = true;
+            showInsightEvent(`⛰ Hoechster Punkt: ${formatElevationMeters(routeInsights.highest.ele)}`);
+          }
+        }
+
         const shouldUpdateTrail =
           progress >= 1 || now - lastTrailUpdateAt >= TRAIL_UPDATE_INTERVAL_MS;
         if (shouldUpdateTrail && map.getSource("route")) {
@@ -805,6 +1060,7 @@ function startAnimation() {
 
           playRouteOutro(outroDuration).then(() => {
             updateAltitudeOverlayProgress(1);
+            hideInsightEvent();
             if (timedOut) {
               setStatus("Animation mit Failsafe beendet (Zeitlimit erreicht). Gesamtansicht gesetzt.");
             } else {
