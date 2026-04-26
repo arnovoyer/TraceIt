@@ -685,8 +685,8 @@ function createInsightMarker(type, point, label) {
   const marker = new maplibregl.Marker({
     element: el,
     anchor: "bottom",
-    pitchAlignment: "map",
-    rotationAlignment: "map",
+    pitchAlignment: "viewport",
+    rotationAlignment: "viewport",
   })
     .setLngLat([point.lon, point.lat])
     .addTo(map);
@@ -715,8 +715,8 @@ function createPhotoSpotMarker(spot) {
   const marker = new maplibregl.Marker({
     element: markerEl,
     anchor: "bottom",
-    pitchAlignment: "map",
-    rotationAlignment: "map",
+    pitchAlignment: "viewport",
+    rotationAlignment: "viewport",
   })
     .setLngLat([spot.lon, spot.lat])
     .setPopup(popup)
