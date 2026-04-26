@@ -9,6 +9,7 @@ const statusText = document.getElementById("statusText");
 const gpxInput = document.getElementById("gpxInput");
 const playButton = document.getElementById("playButton");
 const recordButton = document.getElementById("recordButton");
+const photoInput = document.getElementById("photoInput");
 const durationInput = document.getElementById("durationInput");
 const formatSelect = document.getElementById("formatSelect");
 const mapFrame = document.getElementById("mapFrame");
@@ -21,6 +22,7 @@ const altitudeClipRect = document.getElementById("altitudeClipRect");
 const insightPanel = document.getElementById("insightPanel");
 const maxSpeedValue = document.getElementById("maxSpeedValue");
 const maxElevationValue = document.getElementById("maxElevationValue");
+const photoSpotCount = document.getElementById("photoSpotCount");
 const insightEvent = document.getElementById("insightEvent");
 
 let routePoints = [];
@@ -30,6 +32,9 @@ let isRecording = false;
 let altitudeOverlayState = null;
 let routeInsights = null;
 let highlightMarkers = [];
+let photoSpots = [];
+let photoMarkers = [];
+let pendingPhotoFile = null;
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
@@ -37,6 +42,8 @@ const MAX_ALTITUDE_POINTS = 700;
 const TRAIL_UPDATE_INTERVAL_MS = 16;
 const HIGHLIGHT_SLOWDOWN_RADIUS = 55;
 const HIGHLIGHT_SLOWDOWN_STRENGTH = 0.56;
+const PHOTO_SLOWDOWN_RADIUS = 42;
+const PHOTO_SLOWDOWN_STRENGTH = 0.46;
 
 const CAMERA_CONFIG = {
   pitch: 74,
@@ -263,9 +270,17 @@ function updateInsightsPanel() {
   maxElevationValue.textContent = routeInsights.highest
     ? formatElevationMeters(routeInsights.highest.ele)
     : "-";
+  photoSpotCount.textContent = String(photoSpots.length);
 
   hideInsightEvent();
   insightPanel.classList.remove("hidden");
+}
+
+function updatePhotoCount() {
+  if (!photoSpotCount) {
+    return;
+  }
+  photoSpotCount.textContent = String(photoSpots.length);
 }
 
 function findNearestPointIndex(points, targetPoint) {
@@ -340,6 +355,22 @@ function clearInsightMarkers() {
   highlightMarkers = [];
 }
 
+function clearPhotoMarkers() {
+  photoMarkers.forEach((entry) => entry.marker.remove());
+  photoMarkers = [];
+}
+
+function clearPhotoSpots() {
+  clearPhotoMarkers();
+  photoSpots.forEach((spot) => {
+    if (spot.url) {
+      URL.revokeObjectURL(spot.url);
+    }
+  });
+  photoSpots = [];
+  updatePhotoCount();
+}
+
 function createInsightMarker(type, point, label) {
   if (!point) {
     return;
@@ -347,13 +378,62 @@ function createInsightMarker(type, point, label) {
 
   const el = document.createElement("div");
   el.className = `highlight-marker ${type}`;
-  el.textContent = type === "speed" ? "⚡" : "⛰";
+  const glyph = document.createElement("span");
+  glyph.className = "marker-glyph";
+  glyph.textContent = type === "speed" ? "⚡" : "▲";
+  el.appendChild(glyph);
   el.title = label;
 
   const marker = new maplibregl.Marker({ element: el, anchor: "center" })
     .setLngLat([point.lon, point.lat])
     .addTo(map);
   highlightMarkers.push(marker);
+}
+
+function createPhotoSpotMarker(spot) {
+  const markerEl = document.createElement("div");
+  markerEl.className = "photo-spot-marker";
+
+  const img = document.createElement("img");
+  img.src = spot.url;
+  img.alt = spot.name;
+  markerEl.appendChild(img);
+
+  const popupHtml = `
+    <div class="photo-popup">
+      <img src="${spot.url}" alt="${spot.name}">
+      <strong>${spot.name}</strong>
+      <span>Foto-Spot</span>
+    </div>
+  `;
+
+  const popup = new maplibregl.Popup({ offset: 24 }).setHTML(popupHtml);
+  const marker = new maplibregl.Marker({ element: markerEl, anchor: "bottom" })
+    .setLngLat([spot.lon, spot.lat])
+    .setPopup(popup)
+    .addTo(map);
+
+  photoMarkers.push({ marker, popup, spotId: spot.id });
+}
+
+function addPhotoSpotAt(lngLat, file) {
+  const spot = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    lon: lngLat.lng,
+    lat: lngLat.lat,
+    name: file.name || `Spot ${photoSpots.length + 1}`,
+    url: URL.createObjectURL(file),
+    routeIndex: -1,
+  };
+
+  if (routePoints.length >= 2) {
+    spot.routeIndex = findNearestPointIndex(routePoints, spot);
+  }
+
+  photoSpots.push(spot);
+  createPhotoSpotMarker(spot);
+  updatePhotoCount();
+  updateInsightsPanel();
 }
 
 function renderInsightMarkers() {
@@ -381,7 +461,7 @@ function renderInsightMarkers() {
 
 function computeHighlightSlowdown(segmentIndex) {
   if (!routeInsights) {
-    return 1;
+    return computePhotoSlowdown(segmentIndex);
   }
 
   const indices = [];
@@ -408,7 +488,30 @@ function computeHighlightSlowdown(segmentIndex) {
     factor = Math.min(factor, localFactor);
   }
 
-  return Math.max(0.38, factor);
+  return Math.max(0.38, factor) * computePhotoSlowdown(segmentIndex);
+}
+
+function computePhotoSlowdown(segmentIndex) {
+  if (!photoSpots.length) {
+    return 1;
+  }
+
+  let factor = 1;
+  for (const spot of photoSpots) {
+    if (!Number.isInteger(spot.routeIndex) || spot.routeIndex < 0) {
+      continue;
+    }
+    const distanceIdx = Math.abs(segmentIndex - spot.routeIndex);
+    if (distanceIdx > PHOTO_SLOWDOWN_RADIUS) {
+      continue;
+    }
+
+    const proximity = 1 - distanceIdx / PHOTO_SLOWDOWN_RADIUS;
+    const localFactor = 1 - proximity * PHOTO_SLOWDOWN_STRENGTH;
+    factor = Math.min(factor, localFactor);
+  }
+
+  return Math.max(0.42, factor);
 }
 
 function buildAltitudePathData(points) {
@@ -863,6 +966,8 @@ async function prewarmRouteTiles() {
 }
 
 async function applyParsedGpxData(data) {
+  clearPhotoSpots();
+
   const sampledPoints = sanitizeAndSamplePoints(data.points);
   routePoints = densifyRoutePoints(sampledPoints, 10);
   cameraPoints = smoothRoutePoints(routePoints, 8);
@@ -941,6 +1046,7 @@ function startAnimation() {
       fastest: false,
       highest: false,
     };
+    const reachedPhotoSpotIds = new Set();
 
     resetAnimatedRouteLine();
     updateRouteHead(routePoints[0], 0);
@@ -1023,6 +1129,16 @@ function startAnimation() {
           if (Math.abs(segmentIndex - routeInsights.highestRouteIndex) <= 5) {
             reachedHighlight.highest = true;
             showInsightEvent(`⛰ Hoechster Punkt: ${formatElevationMeters(routeInsights.highest.ele)}`);
+          }
+        }
+
+        for (const spot of photoSpots) {
+          if (reachedPhotoSpotIds.has(spot.id) || !Number.isInteger(spot.routeIndex) || spot.routeIndex < 0) {
+            continue;
+          }
+          if (Math.abs(segmentIndex - spot.routeIndex) <= 5) {
+            reachedPhotoSpotIds.add(spot.id);
+            showInsightEvent(`📷 Foto-Spot: ${spot.name}`);
           }
         }
 
@@ -1217,6 +1333,29 @@ gpxInput.addEventListener("change", async (event) => {
 formatSelect.addEventListener("change", () => {
   const selected = applySelectedFormat();
   setStatus(`Format umgestellt auf ${FORMAT_CONFIG[selected].label}.`);
+});
+
+photoInput.addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  pendingPhotoFile = file;
+  map.getCanvas().style.cursor = "crosshair";
+  setStatus(`Bild bereit: ${file.name}. Klicke jetzt auf die Karte, um den Spot zu setzen.`);
+});
+
+map.on("click", (event) => {
+  if (!pendingPhotoFile) {
+    return;
+  }
+
+  addPhotoSpotAt(event.lngLat, pendingPhotoFile);
+  setStatus(`Foto-Spot hinzugefuegt: ${pendingPhotoFile.name}`);
+  pendingPhotoFile = null;
+  photoInput.value = "";
+  map.getCanvas().style.cursor = "";
 });
 
 applySelectedFormat();

@@ -23,6 +23,9 @@
           <option value="portrait">9:16</option>
         </select>
 
+        <label class="file-input-label" for="photoInput">Bild-Spot</label>
+        <input id="photoInput" type="file" accept="image/*" />
+
         <button id="playButton" disabled>Animation starten</button>
         <button id="recordButton" disabled>Animation aufnehmen & herunterladen</button>
       </header>
@@ -43,6 +46,11 @@
               <span class="insight-icon" aria-hidden="true">⛰</span>
               <span class="insight-label">Hoechster Punkt</span>
               <strong id="maxElevationValue">-</strong>
+            </div>
+            <div class="insight-row">
+              <span class="insight-icon" aria-hidden="true">📷</span>
+              <span class="insight-label">Foto-Spots</span>
+              <strong id="photoSpotCount">0</strong>
             </div>
             <p id="insightEvent" class="insight-event hidden"></p>
           </aside>

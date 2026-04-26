@@ -241,24 +241,85 @@ input[type="number"]::selection {
 }
 
 .highlight-marker {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
-  display: grid;
-  place-items: center;
-  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 3px solid #facc15;
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.highlight-marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  transform: translateX(-50%) rotate(45deg);
+  background: #ffffff;
+  border-right: 3px solid #facc15;
+  border-bottom: 3px solid #facc15;
+  border-radius: 2px;
+}
+
+.highlight-marker .marker-glyph {
+  color: #222a34;
+  font-size: 0.92rem;
+  font-weight: 800;
   line-height: 1;
-  color: #fff9d7;
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35), 0 0 0 4px rgba(251, 191, 36, 0.14);
 }
 
-.highlight-marker.speed {
-  background: radial-gradient(circle at 30% 30%, #fcd34d, #f59e0b 70%);
+.highlight-marker.speed .marker-glyph {
+  font-size: 0.96rem;
 }
 
-.highlight-marker.elevation {
-  background: radial-gradient(circle at 30% 30%, #fde68a, #d97706 72%);
+.highlight-marker.elevation .marker-glyph {
+  font-size: 0.84rem;
+}
+
+.photo-spot-marker {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #facc15;
+  background: #0f1a2a;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
+}
+
+.photo-spot-marker img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-popup {
+  min-width: 190px;
+}
+
+.photo-popup img {
+  width: 100%;
+  max-height: 180px;
+  border-radius: 8px;
+  object-fit: cover;
+  margin-bottom: 6px;
+}
+
+.photo-popup strong {
+  display: block;
+  color: #283444;
+  font-size: 0.85rem;
+}
+
+.photo-popup span {
+  color: #5a6778;
+  font-size: 0.78rem;
 }
 
 .altitude-overlay {
