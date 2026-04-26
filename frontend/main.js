@@ -24,6 +24,7 @@ const maxSpeedValue = document.getElementById("maxSpeedValue");
 const maxElevationValue = document.getElementById("maxElevationValue");
 const maxSpeedRow = document.getElementById("maxSpeedRow");
 const maxElevationRow = document.getElementById("maxElevationRow");
+const photoRow = document.getElementById("photoRow");
 const photoSpotCount = document.getElementById("photoSpotCount");
 const insightEvent = document.getElementById("insightEvent");
 
@@ -417,6 +418,7 @@ function showInsightEvent(text) {
   }
   insightEvent.textContent = text;
   insightEvent.classList.remove("hidden");
+  insightPanel?.classList.remove("hidden");
 }
 
 function updateInsightsPanel() {
@@ -433,21 +435,18 @@ function updateInsightsPanel() {
   }
 
   maxSpeedValue.textContent = routeInsights.fastest ? "In Naehe sichtbar" : "Keine Zeitdaten";
-  if (routeInsights.fastest) {
-    maxSpeedRow?.classList.add("hidden-row");
-  } else {
-    maxSpeedRow?.classList.remove("hidden-row");
-  }
   maxElevationValue.textContent = routeInsights.highest ? "Noch gesperrt" : "-";
   photoSpotCount.textContent = String(photoSpots.length);
 
-  maxSpeedRow?.classList.add("muted");
+  maxSpeedRow?.classList.add("hidden-row", "muted");
   maxSpeedRow?.classList.remove("unlocked");
-  maxElevationRow?.classList.add("muted");
+  maxElevationRow?.classList.add("hidden-row", "muted");
   maxElevationRow?.classList.remove("unlocked");
+  photoRow?.classList.add("hidden-row", "muted");
+  photoRow?.classList.remove("unlocked");
 
   hideInsightEvent();
-  insightPanel.classList.remove("hidden");
+  insightPanel.classList.add("hidden");
 }
 
 function setSpeedRowByProximity(isNear) {
@@ -462,6 +461,47 @@ function setSpeedRowByProximity(isNear) {
     maxSpeedRow.classList.add("hidden-row");
     maxSpeedValue.textContent = "In Naehe sichtbar";
   }
+}
+
+function updateStatsVisibilityByProximity(segmentIndex) {
+  if (!insightPanel || !routeInsights) {
+    return;
+  }
+
+  const nearFast = isNearIndex(segmentIndex, routeInsights.fastestRouteIndex);
+  const nearHighest = isNearIndex(segmentIndex, routeInsights.highestRouteIndex);
+  const nearPhoto = photoSpots.some((spot) => isNearIndex(segmentIndex, spot.routeIndex));
+
+  if (nearFast && routeInsights.fastest) {
+    maxSpeedRow?.classList.remove("hidden-row");
+    setSpeedRowByProximity(true);
+  } else {
+    maxSpeedRow?.classList.add("hidden-row");
+    setSpeedRowByProximity(false);
+  }
+
+  if (nearHighest && routeInsights.highest) {
+    maxElevationRow?.classList.remove("hidden-row");
+    if (!routeInsights.unlockedHighest) {
+      maxElevationValue.textContent = formatElevationMeters(routeInsights.highest.ele);
+    }
+  } else {
+    maxElevationRow?.classList.add("hidden-row");
+  }
+
+  if (nearPhoto && photoSpots.length > 0) {
+    photoRow?.classList.remove("hidden-row");
+  } else {
+    photoRow?.classList.add("hidden-row");
+  }
+
+  const eventVisible = insightEvent && !insightEvent.classList.contains("hidden");
+  const anyRowVisible =
+    (maxSpeedRow && !maxSpeedRow.classList.contains("hidden-row")) ||
+    (maxElevationRow && !maxElevationRow.classList.contains("hidden-row")) ||
+    (photoRow && !photoRow.classList.contains("hidden-row"));
+
+  insightPanel.classList.toggle("hidden", !anyRowVisible && !eventVisible);
 }
 
 function triggerUnlockPulse(element) {
@@ -645,8 +685,8 @@ function createInsightMarker(type, point, label) {
   const marker = new maplibregl.Marker({
     element: el,
     anchor: "bottom",
-    pitchAlignment: "viewport",
-    rotationAlignment: "viewport",
+    pitchAlignment: "map",
+    rotationAlignment: "map",
   })
     .setLngLat([point.lon, point.lat])
     .addTo(map);
@@ -675,8 +715,8 @@ function createPhotoSpotMarker(spot) {
   const marker = new maplibregl.Marker({
     element: markerEl,
     anchor: "bottom",
-    pitchAlignment: "viewport",
-    rotationAlignment: "viewport",
+    pitchAlignment: "map",
+    rotationAlignment: "map",
   })
     .setLngLat([spot.lon, spot.lat])
     .setPopup(popup)
@@ -1346,6 +1386,7 @@ function startAnimation() {
         const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
         const localT = scaled - segmentIndex;
 
+        updateStatsVisibilityByProximity(segmentIndex);
         setSpeedRowByProximity(isNearIndex(segmentIndex, routeInsights?.fastestRouteIndex));
 
         const current = interpolatePoint(
@@ -1460,6 +1501,7 @@ function startAnimation() {
           playRouteOutro(outroDuration).then(() => {
             updateAltitudeOverlayProgress(1);
             hideInsightEvent();
+            insightPanel?.classList.add("hidden");
             if (timedOut) {
               setStatus("Animation mit Failsafe beendet (Zeitlimit erreicht). Gesamtansicht gesetzt.");
             } else {
