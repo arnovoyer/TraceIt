@@ -51,12 +51,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import com.example.gpxvideooverlay.data.ActivityItem
 import com.example.gpxvideooverlay.data.ActivityType
 import com.example.gpxvideooverlay.data.SampleRepository
 import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -6,3 +6,7 @@ node_modules/
 frames/
 .env
 frontend/config.local.js
+android/.gradle/
+android/.idea/
+android/**/build/
+android/local.properties

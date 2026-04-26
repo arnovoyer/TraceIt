@@ -140,7 +140,7 @@ function getActiveCameraConfig() {
 
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
 
-map.on("load", () => {
+map.on("load", async () => {
   map.addSource("terrainSource", {
     type: "raster-dem",
     // MapTiler terrain-rgb source in free tier.
@@ -162,7 +162,7 @@ map.on("load", () => {
     },
   });
 
-  ensureMarkerImages();
+  await ensureMarkerImages();
   ensureMarkerLayers();
   syncMarkerLayers();
 });
@@ -273,7 +273,7 @@ function makeMarkerSvg(kind) {
   `;
 }
 
-function ensureMarkerImages() {
+async function ensureMarkerImages() {
   const specs = [
     ["highlight-speed", makeMarkerSvg("speed")],
     ["highlight-elevation", makeMarkerSvg("elevation")],
@@ -284,7 +284,12 @@ function ensureMarkerImages() {
     if (!map.hasImage(name)) {
       const image = new Image();
       image.decoding = "async";
+      const loaded = new Promise((resolve, reject) => {
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+      });
       image.src = createSvgDataUrl(svg);
+      await loaded;
       map.addImage(name, image);
     }
   }

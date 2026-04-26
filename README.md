@@ -11,6 +11,10 @@ Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre 
   - MapLibre 3D (Terrain + Satelliten-Style)
   - Route zeichnen
   - Kamera folgt der Route mit dynamischem Bearing/Pitch
+- `android/`:
+  - Native Jetpack-Compose-App als Startpunkt
+  - Activity-Library, Import/Sync-, Editor- und Export-Screen als Gerüst
+  - Lokale Datenhaltung und spätere API-Anbindung sind dafür vorgesehen
 
 ## 1) Voraussetzungen
 
@@ -162,6 +166,21 @@ Idee:
 Wichtig bei Remotion:
 - Headless Rendering von WebGL kann je nach Umgebung GPU/Flags benötigen
 - Für reproduzierbare Ergebnisse: framebasierte Interpolation statt realtime easing
+
+## 7) Android-Startpunkt
+
+Im Ordner `android/` liegt jetzt ein erstes natives Kotlin/Compose-Gerüst.
+
+Enthalten sind aktuell:
+- App-Shell mit Library-, Import-, Editor- und Export-Bereichen
+- Beispiel-Daten für Aktivitäten
+- Jetpack-Compose-Theme im dunklen Stil mit gelben Akzenten
+
+Nächste sinnvolle Ausbaustufen:
+- echte GPX-/Strava-Import-Quelle
+- lokale Speicherung mit Room
+- Kartenansicht und Foto-Zuordnung
+- Export-Workflow für Vorschau und Video
 
 
 ## API Response (Parse)
