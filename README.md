@@ -175,12 +175,26 @@ Enthalten sind aktuell:
 - App-Shell mit Library-, Import-, Editor- und Export-Bereichen
 - Beispiel-Daten für Aktivitäten
 - Jetpack-Compose-Theme im dunklen Stil mit gelben Akzenten
+- lokaler Aktivitäts- und Medien-Storage im App-Dateisystem
+- GPX-Import, Bild-Import, Foto-Zuordnung und Review-Dialog vor dem Export
 
 Nächste sinnvolle Ausbaustufen:
 - echte GPX-/Strava-Import-Quelle
 - lokale Speicherung mit Room
 - Kartenansicht und Foto-Zuordnung
 - Export-Workflow für Vorschau und Video
+
+Android bauen:
+
+```bash
+cd android
+gradlew.bat assembleDebug
+```
+
+Hinweis zu Secrets:
+- In der Android-App ist aktuell kein API-Key hart codiert.
+- Falls du später Strava, Garmin oder MapTiler anschließt, nutze lokale, nicht versionierte Konfigurationen oder einen gesicherten Backend-Flow.
+- `android/local.properties`, `android/.gradle/`, `android/.idea/` und Android-Build-Artefakte sind in `.gitignore` ausgeschlossen.
 
 
 ## API Response (Parse)
