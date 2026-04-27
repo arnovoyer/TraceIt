@@ -14,5 +14,14 @@ data class ActivityItem(
     val subtitle: String,
     val distanceLabel: String,
     val dateLabel: String,
+    val startedAtMs: Long,
     val type: ActivityType,
+)
+
+data class MediaItem(
+    val id: String,
+    val activityId: String,
+    val uri: String,
+    val displayName: String,
+    val capturedAtMs: Long,
 )
