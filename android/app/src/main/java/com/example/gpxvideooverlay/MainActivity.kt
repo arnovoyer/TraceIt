@@ -73,6 +73,7 @@ import com.example.gpxvideooverlay.data.TimestampMode
 import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
 
 private enum class OverlayScreen {
     Import,
@@ -116,6 +117,7 @@ private fun OverlayApp() {
 
     var previewReady by remember { mutableStateOf(false) }
     var previewImageCount by remember { mutableIntStateOf(0) }
+    var previewMedia by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var isProcessing by remember { mutableStateOf(false) }
     var processingMessage by remember { mutableStateOf("Lade...") }
 
@@ -364,6 +366,7 @@ private fun OverlayApp() {
                                 }
                                 if (selectedMedia.isEmpty()) {
                                     // Allow preview without images: create an empty preview
+                                    previewMedia = emptyList()
                                     previewImageCount = 0
                                     previewReady = true
                                     statusMessage = "Preview erstellt (keine Bilder)."
@@ -454,7 +457,9 @@ private fun OverlayApp() {
                 processingMessage = "Preview wird erstellt..."
                 coroutineScope.launch {
                     delay(300)
-                    previewImageCount = reviewMedia.size - excludedMediaIds.size
+                    val chosen = reviewMedia.filterNot { excludedMediaIds.contains(it.id) }
+                    previewMedia = chosen
+                    previewImageCount = chosen.size
                     previewReady = true
                     statusMessage = "Preview erstellt mit $previewImageCount Bild(ern). Danach kannst du exportieren oder teilen."
                     showReviewDialog = false
@@ -462,6 +467,11 @@ private fun OverlayApp() {
                 }
             },
         )
+    }
+
+    // If preview is ready, show an interactive preview player instead of the static step
+    if (currentScreen == OverlayScreen.Preview && previewReady) {
+        PreviewPlayer(previewMedia = previewMedia, totalDurationSec = videoDurationSec, speedFactor = speedFactor)
     }
 }
 
@@ -702,6 +712,90 @@ private fun shareSummary(context: Context, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(shareIntent, "Teilen"))
+}
+
+// Simple export: package preview images into a ZIP in cache and return the file path.
+private fun exportPreviewAsZip(context: Context, media: List<MediaItem>): String? {
+    if (media.isEmpty()) return null
+    try {
+        val outFile = java.io.File(context.cacheDir, "gpx_preview_export_${System.currentTimeMillis()}.zip")
+        java.util.zip.ZipOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(outFile))).use { zos ->
+            val buffer = ByteArray(4096)
+            for (item in media) {
+                val name = item.displayName ?: "image"
+                val entry = java.util.zip.ZipEntry(name)
+                zos.putNextEntry(entry)
+                context.contentResolver.openInputStream(android.net.Uri.parse(item.uri))?.use { input ->
+                    var read = input.read(buffer)
+                    while (read >= 0) {
+                        zos.write(buffer, 0, read)
+                        read = input.read(buffer)
+                    }
+                }
+                zos.closeEntry()
+            }
+        }
+        return outFile.absolutePath
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+@Composable
+private fun PreviewPlayer(previewMedia: List<MediaItem>, totalDurationSec: Float, speedFactor: Float) {
+    val context = LocalContext.current
+    val count = previewMedia.size
+    var playing by remember { mutableStateOf(false) }
+    var index by remember { mutableIntStateOf(0) }
+    val effectiveDuration = if (speedFactor > 0f) (totalDurationSec / speedFactor) else totalDurationSec
+    val frameMs = if (count > 0) (effectiveDuration * 1000 / count).toLong() else 1000L
+
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(playing, index, count, frameMs) {
+        if (playing && count > 0) {
+            kotlinx.coroutines.delay(frameMs)
+            index = (index + 1) % count
+        }
+    }
+
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("3. Video-Preview (Player)", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            if (count == 0) {
+                Text("Keine Bilder fuer die Vorschau.", color = Color(0xFFB7C7D8))
+            } else {
+                AsyncImage(model = previewMedia[index].uri, contentDescription = previewMedia[index].displayName, modifier = Modifier
+                    .height(240.dp)
+                    .fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { playing = !playing }) {
+                        Text(if (playing) "Pause" else "Play")
+                    }
+                    androidx.compose.material3.Slider(value = if (count > 1) index.toFloat() / (count - 1) else 0f, onValueChange = { frac ->
+                        val pos = (frac * (if (count > 1) (count - 1) else 1)).toInt()
+                        index = pos
+                    })
+                    Text("${index + 1}/$count", color = Color(0xFFB7C7D8))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        coroutineScope.launch {
+                            val path = exportPreviewAsZip(context, previewMedia)
+                            if (path != null) {
+                                // Show simple status via toast-equivalent: update status via dummy shareSummary
+                                shareSummary(context, "Export erstellt: $path")
+                            } else {
+                                shareSummary(context, "Export fehlgeschlagen.")
+                            }
+                        }
+                    }) {
+                        Text("Export als ZIP")
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun galleryPermissionForDevice(): String {
