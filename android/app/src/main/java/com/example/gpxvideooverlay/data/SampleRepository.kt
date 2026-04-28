@@ -1,7 +1,9 @@
 package com.example.gpxvideooverlay.data
 
 import android.content.Context
+import android.content.ContentUris
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -9,6 +11,7 @@ import androidx.exifinterface.media.ExifInterface
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.time.Instant
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,15 +42,24 @@ class SampleRepository(private val context: Context) {
 
     fun importGpxFromUri(uri: Uri, displayName: String): ActivityItem {
         val sourceName = displayName.ifBlank { "Aktivitaet" }
-        val pointCount = readTrackPointCount(uri)
+        val gpxMeta = readGpxMeta(uri)
+        if (!gpxMeta.isGpx) {
+            throw IllegalArgumentException("Die ausgewaehlte Datei ist kein GPX.")
+        }
         val now = System.currentTimeMillis()
+        val startedAt = gpxMeta.startMs ?: now
+        val endedAt = when {
+            gpxMeta.endMs != null && gpxMeta.endMs >= startedAt -> gpxMeta.endMs
+            else -> startedAt + DEFAULT_ACTIVITY_DURATION_MS
+        }
         val item = ActivityItem(
             id = "act-${now}",
             title = sourceName.removeSuffix(".gpx").ifBlank { "Neue Aktivitaet" },
-            subtitle = if (pointCount > 0) "GPX importiert · $pointCount Punkte" else "GPX importiert",
+            subtitle = if (gpxMeta.pointCount > 0) "GPX importiert · ${gpxMeta.pointCount} Punkte" else "GPX importiert",
             distanceLabel = "-",
-            dateLabel = now.toDateLabel(),
-            startedAtMs = now,
+            dateLabel = startedAt.toDateLabel(),
+            startedAtMs = startedAt,
+            endedAtMs = endedAt,
             type = inferTypeFromName(sourceName),
         )
 
@@ -56,15 +68,23 @@ class SampleRepository(private val context: Context) {
         return item
     }
 
-    fun importPhotosToActivity(activityId: String, uris: List<Uri>): Int {
+    fun importPhotosToActivity(activityId: String, uris: List<Uri>, mode: TimestampMode): Int {
         if (uris.isEmpty()) {
             return 0
         }
 
+        val activity = activities.firstOrNull { it.id == activityId } ?: return 0
+
         val now = System.currentTimeMillis()
+        val existingKeys = mediaItems.map { "${it.activityId}|${it.uri}" }.toHashSet()
         val additions = uris.mapIndexed { index, uri ->
             val name = queryDisplayName(uri).ifBlank { "Bild ${index + 1}" }
-            val capturedAt = readExifDateTime(uri) ?: now
+            val exifTime = readExifDateTime(uri)
+            val capturedAt = when (mode) {
+                TimestampMode.Exif -> exifTime ?: now
+                TimestampMode.ActivityStart -> activity.startedAtMs
+                TimestampMode.Now -> now
+            }
             MediaItem(
                 id = "media-${now}-${index}",
                 activityId = activityId,
@@ -72,11 +92,73 @@ class SampleRepository(private val context: Context) {
                 displayName = name,
                 capturedAtMs = capturedAt,
             )
-        }
+        }.filter { existingKeys.add("${it.activityId}|${it.uri}") }
 
         mediaItems = mediaItems + additions
         persist()
         return additions.size
+    }
+
+    fun importGalleryPhotosForActivity(activityId: String): Pair<Int, Int> {
+        val activity = activities.firstOrNull { it.id == activityId } ?: return 0 to 0
+        val start = activity.startedAtMs - GALLERY_TIME_TOLERANCE_MS
+        val end = activity.endedAtMs + GALLERY_TIME_TOLERANCE_MS
+
+        val projection = arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME,
+            MediaStore.Images.Media.DATE_TAKEN,
+            MediaStore.Images.Media.DATE_ADDED,
+        )
+        val selection = "${MediaStore.Images.Media.DATE_TAKEN} BETWEEN ? AND ?"
+        val selectionArgs = arrayOf(start.toString(), end.toString())
+
+        var scanned = 0
+        val existingKeys = mediaItems.map { "${it.activityId}|${it.uri}" }.toHashSet()
+        val additions = mutableListOf<MediaItem>()
+
+        context.contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            "${MediaStore.Images.Media.DATE_TAKEN} ASC",
+        )?.use { cursor ->
+            val idIdx = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+            val nameIdx = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+            val takenIdx = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
+            val addedIdx = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
+
+            while (cursor.moveToNext()) {
+                scanned += 1
+                val imageId = cursor.getLong(idIdx)
+                val imageUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imageId)
+                val key = "${activityId}|${imageUri}"
+                if (!existingKeys.add(key)) {
+                    continue
+                }
+
+                val takenMs = cursor.getLong(takenIdx)
+                val addedSeconds = cursor.getLong(addedIdx)
+                val capturedAt = if (takenMs > 0L) takenMs else addedSeconds * 1000L
+                val displayName = cursor.getString(nameIdx).orEmpty().ifBlank { "Bild $imageId" }
+
+                additions += MediaItem(
+                    id = "media-gallery-${activityId}-${imageId}",
+                    activityId = activityId,
+                    uri = imageUri.toString(),
+                    displayName = displayName,
+                    capturedAtMs = capturedAt,
+                )
+            }
+        }
+
+        if (additions.isNotEmpty()) {
+            mediaItems = mediaItems + additions
+            persist()
+        }
+
+        return additions.size to scanned
     }
 
     fun autoAssignPhotos(uris: List<Uri>): Pair<Int, Int> {
@@ -125,14 +207,34 @@ class SampleRepository(private val context: Context) {
         return activities.minByOrNull { kotlin.math.abs(it.startedAtMs - timestampMs) }
     }
 
-    private fun readTrackPointCount(uri: Uri): Int {
+    private fun readGpxMeta(uri: Uri): GpxMeta {
         return try {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
                 val text = reader.readText()
-                Regex("<trkpt\\b").findAll(text).count() + Regex("<rtept\\b").findAll(text).count()
-            } ?: 0
+                val pointCount = Regex("<trkpt\\b").findAll(text).count() + Regex("<rtept\\b").findAll(text).count()
+                val isGpx = Regex("<gpx\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)
+                val timestamps = Regex("<time>([^<]+)</time>")
+                    .findAll(text)
+                    .mapNotNull { match -> parseIsoTime(match.groupValues[1]) }
+                    .toList()
+
+                GpxMeta(
+                    pointCount = pointCount,
+                    startMs = timestamps.minOrNull(),
+                    endMs = timestamps.maxOrNull(),
+                    isGpx = isGpx,
+                )
+            } ?: GpxMeta(0, null, null, false)
         } catch (_: Exception) {
-            0
+            GpxMeta(0, null, null, false)
+        }
+    }
+
+    private fun parseIsoTime(raw: String): Long? {
+        return try {
+            Instant.parse(raw.trim()).toEpochMilli()
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -230,6 +332,7 @@ private fun ActivityItem.toJson(): JSONObject = JSONObject().apply {
     put("distanceLabel", distanceLabel)
     put("dateLabel", dateLabel)
     put("startedAtMs", startedAtMs)
+    put("endedAtMs", endedAtMs)
     put("type", type.name)
 }
 
@@ -248,6 +351,7 @@ private fun JSONObject.toActivityItem(): ActivityItem = ActivityItem(
     distanceLabel = getString("distanceLabel"),
     dateLabel = getString("dateLabel"),
     startedAtMs = optLong("startedAtMs", System.currentTimeMillis()),
+    endedAtMs = optLong("endedAtMs", optLong("startedAtMs", System.currentTimeMillis()) + DEFAULT_ACTIVITY_DURATION_MS),
     type = ActivityType.valueOf(getString("type")),
 )
 
@@ -263,3 +367,19 @@ private fun Long.toDateLabel(): String {
     val formatter = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY)
     return formatter.format(Date(this))
 }
+
+private data class GpxMeta(
+    val pointCount: Int,
+    val startMs: Long?,
+    val endMs: Long?,
+    val isGpx: Boolean,
+)
+
+enum class TimestampMode {
+    Exif,
+    ActivityStart,
+    Now,
+}
+
+private const val DEFAULT_ACTIVITY_DURATION_MS = 90L * 60L * 1000L
+private const val GALLERY_TIME_TOLERANCE_MS = 15L * 60L * 1000L

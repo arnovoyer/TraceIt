@@ -15,6 +15,7 @@ data class ActivityItem(
     val distanceLabel: String,
     val dateLabel: String,
     val startedAtMs: Long,
+    val endedAtMs: Long,
     val type: ActivityType,
 )
 

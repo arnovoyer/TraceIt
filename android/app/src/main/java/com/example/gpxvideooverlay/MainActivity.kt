@@ -1,7 +1,11 @@
 package com.example.gpxvideooverlay
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
@@ -9,13 +13,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments
+import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,34 +27,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Hiking
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,11 +59,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.gpxvideooverlay.data.ActivityItem
-import com.example.gpxvideooverlay.data.ActivityType
 import com.example.gpxvideooverlay.data.MediaItem
 import com.example.gpxvideooverlay.data.SampleRepository
+import com.example.gpxvideooverlay.data.TimestampMode
 import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
 
 class MainActivity : ComponentActivity() {
@@ -81,34 +78,66 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppTab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Library("Library", Icons.Filled.Hiking),
-    Import("Import", Icons.Filled.CloudDownload),
-    Editor("Editor", Icons.Filled.Map),
-    Export("Export", Icons.Filled.PlayArrow)
-}
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun OverlayApp() {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val repository = remember(appContext) { SampleRepository(appContext) }
 
-    var activeTab by remember { mutableStateOf(AppTab.Library) }
-    var selectedFilter by remember { mutableStateOf<ActivityType?>(null) }
     var selectedActivityId by remember { mutableStateOf<String?>(null) }
-    var statusMessage by remember { mutableStateOf("Bereit") }
+    var statusMessage by remember { mutableStateOf("Bereit: Aktivitaet importieren") }
+    var timestampMode by remember { mutableStateOf(TimestampMode.Exif) }
 
     var showReviewDialog by remember { mutableStateOf(false) }
     var reviewMedia by remember { mutableStateOf<List<MediaItem>>(emptyList()) }
     var excludedMediaIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
+    var settingsOpen by remember { mutableStateOf(false) }
+    var exportFormat by remember { mutableStateOf("MP4") }
+    var videoDurationSec by remember { mutableFloatStateOf(45f) }
+    var speedFactor by remember { mutableFloatStateOf(1f) }
+
+    var previewReady by remember { mutableStateOf(false) }
+    var previewImageCount by remember { mutableIntStateOf(0) }
+
+    var pendingGalleryAutoAssignActivityId by remember { mutableStateOf<String?>(null) }
+
     val activities = repository.activities
     val selectedActivity = activities.firstOrNull { it.id == selectedActivityId } ?: activities.firstOrNull()
+    val selectedMedia = selectedActivity?.let { repository.mediaForActivity(it.id) }.orEmpty()
 
-    if (selectedActivity != null && selectedActivityId == null) {
+    if (selectedActivityId == null && selectedActivity != null) {
         selectedActivityId = selectedActivity.id
+    }
+
+    fun runGalleryAutoAssign(activityId: String) {
+        val permission = galleryPermissionForDevice()
+        val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            val (assigned, scanned) = repository.importGalleryPhotosForActivity(activityId)
+            statusMessage = if (assigned > 0) {
+                "$assigned Bilder aus Galerie automatisch zugeordnet ($scanned geprueft)."
+            } else {
+                "Keine passenden Galerie-Bilder im Aktivitaetszeitraum gefunden."
+            }
+        } else {
+            pendingGalleryAutoAssignActivityId = activityId
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
+        val targetActivityId = pendingGalleryAutoAssignActivityId
+        if (granted && targetActivityId != null) {
+            val (assigned, scanned) = repository.importGalleryPhotosForActivity(targetActivityId)
+            statusMessage = if (assigned > 0) {
+                "$assigned Bilder aus Galerie automatisch zugeordnet ($scanned geprueft)."
+            } else {
+                "Galerie gelesen, aber keine passenden Bilder im Aktivitaetszeitraum gefunden."
+            }
+        } else if (!granted) {
+            statusMessage = "Ohne Galerie-Berechtigung ist die automatische Bildsuche nicht moeglich."
+        }
+        pendingGalleryAutoAssignActivityId = null
     }
 
     val gpxPicker = rememberLauncherForActivityResult(OpenDocument()) { uri: Uri? ->
@@ -116,33 +145,44 @@ private fun OverlayApp() {
             statusMessage = "Kein GPX ausgewaehlt."
             return@rememberLauncherForActivityResult
         }
+
         persistReadPermission(appContext, uri)
         val name = queryDisplayName(appContext, uri) ?: "Importiert"
-        val imported = repository.importGpxFromUri(uri, name)
+        val imported = try {
+            repository.importGpxFromUri(uri, name)
+        } catch (_: IllegalArgumentException) {
+            statusMessage = "Die ausgewaehlte Datei ist kein gueltiges GPX."
+            return@rememberLauncherForActivityResult
+        }
         selectedActivityId = imported.id
-        statusMessage = "GPX importiert: ${imported.title}"
+        previewReady = false
+        statusMessage = "Aktivitaet importiert: ${imported.title}. Suche automatisch passende Galerie-Bilder..."
+
+        val permission = galleryPermissionForDevice()
+        val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            runGalleryAutoAssign(imported.id)
+        } else {
+            pendingGalleryAutoAssignActivityId = imported.id
+            permissionLauncher.launch(permission)
+        }
     }
 
-    val imagePickerForSelected = rememberLauncherForActivityResult(OpenMultipleDocuments()) { uris ->
+    val manualImagePicker = rememberLauncherForActivityResult(OpenMultipleDocuments()) { uris ->
         val activityId = selectedActivityId
         if (activityId == null) {
-            statusMessage = "Bitte zuerst eine Aktivitaet auswaehlen."
+            statusMessage = "Bitte zuerst eine Aktivitaet importieren."
             return@rememberLauncherForActivityResult
         }
 
         uris.forEach { persistReadPermission(appContext, it) }
-        val count = repository.importPhotosToActivity(activityId, uris)
-        statusMessage = if (count > 0) {
-            "$count Bilder zur Aktivitaet hinzugefuegt."
+        val imported = repository.importPhotosToActivity(activityId, uris, timestampMode)
+        previewReady = false
+        statusMessage = if (imported > 0) {
+            "$imported Bilder manuell hinzugefuegt."
         } else {
-            "Keine Bilder importiert."
+            "Keine neuen Bilder hinzugefuegt."
         }
-    }
-
-    val autoImagePicker = rememberLauncherForActivityResult(OpenMultipleDocuments()) { uris ->
-        uris.forEach { persistReadPermission(appContext, it) }
-        val (assigned, skipped) = repository.autoAssignPhotos(uris)
-        statusMessage = "Auto-Zuordnung: $assigned zugeordnet, $skipped uebersprungen."
     }
 
     Scaffold(
@@ -151,85 +191,121 @@ private fun OverlayApp() {
                 title = { Text("GPX Video Overlay") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF101826),
-                    titleContentColor = Color.White
-                )
+                    titleContentColor = Color.White,
+                ),
             )
         },
-        bottomBar = {
-            NavigationBar(containerColor = Color(0xFF101826)) {
-                AppTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = activeTab == tab,
-                        onClick = { activeTab = tab },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) }
-                    )
-                }
-            }
-        }
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color(0xFF0B1220), Color(0xFF12263D), Color(0xFF080C14))
-                    )
+                        listOf(Color(0xFF0B1220), Color(0xFF12263D), Color(0xFF080C14)),
+                    ),
                 )
                 .padding(padding)
-                .padding(16.dp)
+                .padding(16.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatusCard(statusMessage, selectedActivity)
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item {
+                    StatusCard(statusMessage)
+                }
 
-                when (activeTab) {
-                    AppTab.Library -> LibraryScreen(
-                        activities = activities,
-                        selectedFilter = selectedFilter,
-                        selectedActivityId = selectedActivityId,
-                        onFilterSelected = { selectedFilter = it },
-                        onActivitySelected = { selectedActivityId = it.id }
-                    )
-
-                    AppTab.Import -> ImportScreen(
+                item {
+                    ImportActivityStep(
                         selectedActivity = selectedActivity,
-                        onConnectStrava = {
-                            statusMessage = repository.connectStravaPlaceholder()
+                        onImport = {
+                            gpxPicker.launch(arrayOf("application/gpx+xml"))
                         },
-                        onImportFile = {
-                            gpxPicker.launch(arrayOf("application/gpx+xml", "text/xml", "application/xml", "*/*"))
-                        },
-                        onImportPhotosForSelected = {
-                            imagePickerForSelected.launch(arrayOf("image/*"))
-                        },
-                        onAutoAssignPhotos = {
-                            autoImagePicker.launch(arrayOf("image/*"))
-                        }
                     )
+                }
 
-                    AppTab.Editor -> EditorScreen(
-                        activity = selectedActivity,
-                        media = selectedActivity?.let { repository.mediaForActivity(it.id) }.orEmpty()
-                    )
-
-                    AppTab.Export -> ExportScreen(
+                item {
+                    MediaStep(
                         selectedActivity = selectedActivity,
-                        onStartExport = {
+                        media = selectedMedia,
+                        timestampMode = timestampMode,
+                        onTimestampModeSelected = { timestampMode = it },
+                        onImportMore = {
+                            manualImagePicker.launch(arrayOf("image/*"))
+                        },
+                        onAutoAssignFromGallery = {
+                            val activityId = selectedActivityId
+                            if (activityId == null) {
+                                statusMessage = "Bitte zuerst eine Aktivitaet importieren."
+                            } else {
+                                val permission = galleryPermissionForDevice()
+                                val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    runGalleryAutoAssign(activityId)
+                                } else {
+                                    pendingGalleryAutoAssignActivityId = activityId
+                                    permissionLauncher.launch(permission)
+                                }
+                            }
+                        },
+                    )
+                }
+
+                item {
+                    PreviewStep(
+                        selectedActivity = selectedActivity,
+                        mediaCount = selectedMedia.size,
+                        onGeneratePreview = {
                             if (selectedActivity == null) {
-                                statusMessage = "Bitte zuerst eine Aktivitaet waehlen."
-                                return@ExportScreen
+                                statusMessage = "Bitte zuerst eine Aktivitaet importieren."
+                                return@PreviewStep
+                            }
+                            if (selectedMedia.isEmpty()) {
+                                statusMessage = "Keine Bilder vorhanden. Bitte zuerst Bilder laden."
+                                return@PreviewStep
                             }
 
-                            val media = repository.mediaForActivity(selectedActivity.id)
-                            if (media.isEmpty()) {
-                                statusMessage = "Keine Bilder zur Aktivitaet vorhanden."
-                                return@ExportScreen
-                            }
-
-                            reviewMedia = media
+                            reviewMedia = selectedMedia
                             excludedMediaIds = emptySet()
                             showReviewDialog = true
-                        }
+                        },
+                    )
+                }
+
+                item {
+                    SettingsStep(
+                        settingsOpen = settingsOpen,
+                        exportFormat = exportFormat,
+                        videoDurationSec = videoDurationSec,
+                        speedFactor = speedFactor,
+                        onToggleOpen = { settingsOpen = !settingsOpen },
+                        onFormatChange = { exportFormat = it },
+                        onDurationChange = { videoDurationSec = it },
+                        onSpeedChange = { speedFactor = it },
+                    )
+                }
+
+                item {
+                    ExportStep(
+                        previewReady = previewReady,
+                        previewImageCount = previewImageCount,
+                        format = exportFormat,
+                        durationSec = videoDurationSec.toInt(),
+                        speedFactor = speedFactor,
+                        onExport = {
+                            if (!previewReady) {
+                                statusMessage = "Bitte zuerst die Video-Preview generieren."
+                            } else {
+                                statusMessage = "Export gestartet (Platzhalter): $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x."
+                            }
+                        },
+                        onShare = {
+                            if (!previewReady) {
+                                statusMessage = "Bitte zuerst die Video-Preview generieren."
+                            } else {
+                                shareSummary(
+                                    context = context,
+                                    text = "GPX Video vorbereitet: $previewImageCount Bilder, $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x",
+                                )
+                            }
+                        },
                     )
                 }
             }
@@ -249,177 +325,198 @@ private fun OverlayApp() {
             },
             onDismiss = { showReviewDialog = false },
             onConfirm = {
-                val finalCount = reviewMedia.size - excludedMediaIds.size
-                statusMessage = "Video vorbereitet mit $finalCount Bild(ern)."
+                previewImageCount = reviewMedia.size - excludedMediaIds.size
+                previewReady = true
+                statusMessage = "Preview erstellt mit $previewImageCount Bild(ern). Danach kannst du exportieren oder teilen."
                 showReviewDialog = false
-            }
+            },
         )
     }
 }
 
 @Composable
-private fun StatusCard(status: String, selectedActivity: ActivityItem?) {
+private fun StatusCard(status: String) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Status", color = Color.White, fontWeight = FontWeight.SemiBold)
             Text(status, color = Color(0xFFC7D8EA))
-            Text(
-                selectedActivity?.let { "Aktiv: ${it.title}" } ?: "Aktiv: Keine Aktivitaet",
-                color = Color(0xFFF5C84C)
-            )
         }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LibraryScreen(
-    activities: List<ActivityItem>,
-    selectedFilter: ActivityType?,
-    selectedActivityId: String?,
-    onFilterSelected: (ActivityType?) -> Unit,
-    onActivitySelected: (ActivityItem) -> Unit,
+private fun ImportActivityStep(
+    selectedActivity: ActivityItem?,
+    onImport: () -> Unit,
 ) {
-    val filtered = remember(activities, selectedFilter) {
-        if (selectedFilter == null) activities else activities.filter { it.type == selectedFilter }
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Aktivitaeten", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = selectedFilter == null, onClick = { onFilterSelected(null) }, label = { Text("Alle") })
-                    ActivityType.entries.forEach { type ->
-                        FilterChip(
-                            selected = selectedFilter == type,
-                            onClick = { onFilterSelected(type) },
-                            label = { Text(type.label) }
-                        )
-                    }
-                }
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("1. Aktivitaet importieren", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            Text("Waehle eine GPX-Datei. Danach sucht die App automatisch passende Bilder aus der Galerie.", color = Color(0xFFB7C7D8))
+            Button(onClick = onImport) {
+                Icon(Icons.Filled.FolderOpen, contentDescription = null)
+                Text(" GPX importieren")
             }
-        }
-
-        if (filtered.isEmpty()) {
-            ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
+            if (selectedActivity != null) {
+                Text("Aktiv: ${selectedActivity.title}", color = Color(0xFFF5C84C), fontWeight = FontWeight.SemiBold)
                 Text(
-                    "Noch keine Aktivitaet importiert. Bitte in Import starten.",
+                    "Zeitfenster: ${selectedActivity.startedAtMs.toLocalDateTimeLabel()} - ${selectedActivity.endedAtMs.toLocalDateTimeLabel()}",
                     color = Color(0xFFB7C7D8),
-                    modifier = Modifier.padding(16.dp)
                 )
-            }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(filtered) { activity ->
-                    ActivityCard(
-                        activity = activity,
-                        selected = selectedActivityId == activity.id,
-                        onClick = { onActivitySelected(activity) }
-                    )
-                }
             }
         }
     }
 }
 
 @Composable
-private fun ActivityCard(activity: ActivityItem, selected: Boolean, onClick: () -> Unit) {
-    val cardColor = if (selected) Color(0xFF1C3048) else Color(0xFF132033)
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = cardColor),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = activity.type.tint.copy(alpha = 0.18f),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Hiking,
-                    contentDescription = null,
-                    tint = activity.type.tint,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(activity.title, color = Color.White, fontWeight = FontWeight.SemiBold)
-                Text(activity.subtitle, color = Color(0xFFB7C7D8))
-            }
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(activity.distanceLabel, color = Color(0xFFF5C84C), fontWeight = FontWeight.SemiBold)
-                Text(activity.dateLabel, color = Color(0xFF7E95B4))
-                if (selected) {
-                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF6EE7B7))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ImportScreen(
+private fun MediaStep(
     selectedActivity: ActivityItem?,
-    onConnectStrava: () -> Unit,
-    onImportFile: () -> Unit,
-    onImportPhotosForSelected: () -> Unit,
-    onAutoAssignPhotos: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Import & Sync", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    selectedActivity?.let { "Ziel-Aktivitaet: ${it.title}" } ?: "Keine Aktivitaet ausgewaehlt",
-                    color = Color(0xFFF5C84C)
-                )
-                AssistChip(onClick = onConnectStrava, label = { Text("Strava verbinden") }, leadingIcon = { Icon(Icons.Filled.Sync, null) })
-                AssistChip(onClick = onImportFile, label = { Text("GPX Datei importieren") }, leadingIcon = { Icon(Icons.Filled.FolderOpen, null) })
-                AssistChip(onClick = onImportPhotosForSelected, label = { Text("Bilder zur Aktivitaet importieren") }, leadingIcon = { Icon(Icons.Filled.Image, null) })
-                AssistChip(onClick = onAutoAssignPhotos, label = { Text("Bilder automatisch zuordnen") }, leadingIcon = { Icon(Icons.Filled.Image, null) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun EditorScreen(activity: ActivityItem?, media: List<MediaItem>) {
-    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Editor", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-            Text(activity?.title ?: "Noch keine Aktivitaet ausgewaehlt.", color = Color(0xFFB7C7D8))
-            Text("Zugeordnete Bilder: ${media.size}", color = Color(0xFFF5C84C))
-            media.take(6).forEach { item ->
-                Text("• ${item.displayName}", color = Color(0xFFB7C7D8))
-            }
-        }
-    }
-}
-
-@Composable
-private fun ExportScreen(
-    selectedActivity: ActivityItem?,
-    onStartExport: () -> Unit,
+    media: List<MediaItem>,
+    timestampMode: TimestampMode,
+    onTimestampModeSelected: (TimestampMode) -> Unit,
+    onImportMore: () -> Unit,
+    onAutoAssignFromGallery: () -> Unit,
 ) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Export", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            Text("2. Bilder", color = Color.White, style = MaterialTheme.typography.headlineSmall)
             Text(
-                selectedActivity?.let { "Aktivitaet: ${it.title}" } ?: "Bitte zuerst Aktivitaet waehlen.",
-                color = Color(0xFFB7C7D8)
+                if (selectedActivity == null) "Importiere zuerst eine Aktivitaet." else "Bereits geladen: ${media.size}",
+                color = Color(0xFFF5C84C),
             )
-            Button(onClick = onStartExport) {
+
+            if (media.isNotEmpty()) {
+                media.take(6).forEach { item ->
+                    Text("• ${item.displayName} (${item.capturedAtMs.toLocalDateTimeLabel()})", color = Color(0xFFB7C7D8))
+                }
+                if (media.size > 6) {
+                    Text("+ ${media.size - 6} weitere", color = Color(0xFF7E95B4))
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = timestampMode == TimestampMode.Exif,
+                    onClick = { onTimestampModeSelected(TimestampMode.Exif) },
+                    label = { Text("Zeit: EXIF") },
+                )
+                FilterChip(
+                    selected = timestampMode == TimestampMode.ActivityStart,
+                    onClick = { onTimestampModeSelected(TimestampMode.ActivityStart) },
+                    label = { Text("Zeit: Aktivitaetsstart") },
+                )
+                FilterChip(
+                    selected = timestampMode == TimestampMode.Now,
+                    onClick = { onTimestampModeSelected(TimestampMode.Now) },
+                    label = { Text("Zeit: Jetzt") },
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onImportMore, enabled = selectedActivity != null) {
+                    Icon(Icons.Filled.Image, contentDescription = null)
+                    Text(" Weitere Bilder")
+                }
+                Button(onClick = onAutoAssignFromGallery, enabled = selectedActivity != null) {
+                    Icon(Icons.Filled.Image, contentDescription = null)
+                    Text(" Galerie scannen")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewStep(
+    selectedActivity: ActivityItem?,
+    mediaCount: Int,
+    onGeneratePreview: () -> Unit,
+) {
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("3. Video-Preview", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            Text(
+                if (selectedActivity == null) "Keine Aktivitaet ausgewaehlt." else "${selectedActivity.title} · $mediaCount Bild(er)",
+                color = Color(0xFFB7C7D8),
+            )
+            Text("Beim Klick oeffnet sich die Bildauswahl zur finalen Kontrolle.", color = Color(0xFF7E95B4))
+            Button(onClick = onGeneratePreview, enabled = selectedActivity != null) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                Text(" Video vorbereiten")
+                Text(" Preview generieren")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsStep(
+    settingsOpen: Boolean,
+    exportFormat: String,
+    videoDurationSec: Float,
+    speedFactor: Float,
+    onToggleOpen: () -> Unit,
+    onFormatChange: (String) -> Unit,
+    onDurationChange: (Float) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+) {
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Filled.Settings, contentDescription = null, tint = Color(0xFFF5C84C))
+                Text("4. Einstellungen", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            }
+
+            TextButton(onClick = onToggleOpen) {
+                Text(if (settingsOpen) "Einstellungen ausblenden" else "Einstellungen oeffnen")
+            }
+
+            if (settingsOpen) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = exportFormat == "MP4", onClick = { onFormatChange("MP4") }, label = { Text("MP4") })
+                    FilterChip(selected = exportFormat == "WebM", onClick = { onFormatChange("WebM") }, label = { Text("WebM") })
+                }
+
+                Text("Video-Laenge: ${videoDurationSec.toInt()} s", color = Color(0xFFB7C7D8))
+                Slider(value = videoDurationSec, onValueChange = onDurationChange, valueRange = 10f..180f)
+
+                Text("Geschwindigkeit: ${"%.1f".format(speedFactor)}x", color = Color(0xFFB7C7D8))
+                Slider(value = speedFactor, onValueChange = onSpeedChange, valueRange = 0.5f..3f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExportStep(
+    previewReady: Boolean,
+    previewImageCount: Int,
+    format: String,
+    durationSec: Int,
+    speedFactor: Float,
+    onExport: () -> Unit,
+    onShare: () -> Unit,
+) {
+    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("5. Export / Teilen", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            if (previewReady) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF6EE7B7))
+                    Text("Preview bereit: $previewImageCount Bilder, $format, ${durationSec}s, ${"%.1f".format(speedFactor)}x", color = Color(0xFFB7C7D8))
+                }
+            } else {
+                Text("Bitte zuerst die Preview erstellen.", color = Color(0xFFB7C7D8))
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onExport, enabled = previewReady) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Text(" Export")
+                }
+                Button(onClick = onShare, enabled = previewReady) {
+                    Icon(Icons.Filled.Share, contentDescription = null)
+                    Text(" Teilen")
+                }
             }
         }
     }
@@ -442,18 +539,18 @@ private fun VideoReviewDialog(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Checkbox(
+                        androidx.compose.material3.Checkbox(
                             checked = !excludedIds.contains(item.id),
-                            onCheckedChange = { onToggle(item.id) }
+                            onCheckedChange = { onToggle(item.id) },
                         )
                         AsyncImage(
                             model = item.uri,
                             contentDescription = item.displayName,
                             modifier = Modifier
                                 .height(56.dp)
-                                .fillMaxWidth(0.3f)
+                                .fillMaxWidth(0.3f),
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(item.displayName, fontWeight = FontWeight.SemiBold)
@@ -465,20 +562,36 @@ private fun VideoReviewDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Video erstellen")
+                Text("Preview uebernehmen")
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Abbrechen")
             }
-        }
+        },
     )
+}
+
+private fun shareSummary(context: Context, text: String) {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(shareIntent, "Teilen"))
+}
+
+private fun galleryPermissionForDevice(): String {
+    return if (Build.VERSION.SDK_INT >= 33) {
+        Manifest.permission.READ_MEDIA_IMAGES
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
 }
 
 private fun persistReadPermission(context: Context, uri: Uri) {
     try {
-        context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
     } catch (_: SecurityException) {
         // URI may not support persistable permission; ignore.
     }
