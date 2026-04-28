@@ -741,6 +741,9 @@ private fun exportPreviewAsZip(context: Context, media: List<MediaItem>): String
     }
 }
 
+// Note: MP4 export via FFmpeg was removed due to dependency resolution issues.
+// We keep ZIP export as a reliable fallback until FFmpeg is added correctly.
+
 @Composable
 private fun PreviewPlayer(previewMedia: List<MediaItem>, totalDurationSec: Float, speedFactor: Float) {
     val context = LocalContext.current
@@ -782,12 +785,7 @@ private fun PreviewPlayer(previewMedia: List<MediaItem>, totalDurationSec: Float
                     Button(onClick = {
                         coroutineScope.launch {
                             val path = exportPreviewAsZip(context, previewMedia)
-                            if (path != null) {
-                                // Show simple status via toast-equivalent: update status via dummy shareSummary
-                                shareSummary(context, "Export erstellt: $path")
-                            } else {
-                                shareSummary(context, "Export fehlgeschlagen.")
-                            }
+                            if (path != null) shareSummary(context, "ZIP Export erstellt: $path") else shareSummary(context, "Export fehlgeschlagen.")
                         }
                     }) {
                         Text("Export als ZIP")
