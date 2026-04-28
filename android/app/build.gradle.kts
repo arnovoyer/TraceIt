@@ -4,6 +4,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+import java.util.Properties
+
+val localSecrets = Properties().apply {
+    val localSecretsFile = rootProject.file("gradle.local.properties")
+    if (localSecretsFile.exists()) {
+        localSecretsFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     namespace = "com.example.gpxvideooverlay"
     compileSdk = 34
@@ -15,7 +24,12 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        val mapTilerKey = (project.findProperty("MAPTILER_KEY") as String?) ?: ""
+        val mapTilerKey = (
+            localSecrets.getProperty("MAPTILER_KEY")
+                ?: (project.findProperty("MAPTILER_KEY") as String?)
+                ?: System.getenv("MAPTILER_KEY")
+                ?: ""
+            ).trim()
         buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
     }
 

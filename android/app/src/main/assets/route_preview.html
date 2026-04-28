@@ -16,6 +16,11 @@
     let map;
     let ready = false;
 
+    const CAMERA_CONFIG = {
+      pitch: 74,
+      zoom: 14.2
+    };
+
     function ensureMap(key) {
       if (map) return;
       const style = key
@@ -26,8 +31,8 @@
         container: 'map',
         style,
         center: [8.2, 47.0],
-        zoom: 11,
-        pitch: 60
+        zoom: CAMERA_CONFIG.zoom,
+        pitch: CAMERA_CONFIG.pitch
       });
 
       map.on('load', () => {
@@ -56,7 +61,10 @@
           }
         };
 
+        if (map.getLayer('routeHead')) map.removeLayer('routeHead');
+        if (map.getLayer('routeHeadGlow')) map.removeLayer('routeHeadGlow');
         if (map.getLayer('routeLine')) map.removeLayer('routeLine');
+        if (map.getSource('routeHead')) map.removeSource('routeHead');
         if (map.getSource('route')) map.removeSource('route');
 
         map.addSource('route', { type: 'geojson', data: sourceData });
@@ -71,9 +79,44 @@
           }
         });
 
+        if (coords.length > 0) {
+          const head = coords[0];
+          map.addSource('routeHead', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: head }
+            }
+          });
+
+          map.addLayer({
+            id: 'routeHeadGlow',
+            type: 'circle',
+            source: 'routeHead',
+            paint: {
+              'circle-radius': 14,
+              'circle-color': '#FBBF24',
+              'circle-opacity': 0.35
+            }
+          });
+
+          map.addLayer({
+            id: 'routeHead',
+            type: 'circle',
+            source: 'routeHead',
+            paint: {
+              'circle-radius': 6,
+              'circle-color': '#fff36d',
+              'circle-stroke-width': 1,
+              'circle-stroke-color': '#f59e0b'
+            }
+          });
+        }
+
         if (coords.length > 1) {
           const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
-          map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 0 });
+          map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
+          map.easeTo({ pitch: CAMERA_CONFIG.pitch, duration: 0 });
         }
       };
 
