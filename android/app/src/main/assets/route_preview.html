@@ -8,14 +8,31 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #0b1220; }
+    #status {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      color: rgba(255, 255, 255, 0.85);
+      font: 600 14px/1.4 system-ui, sans-serif;
+      text-align: center;
+      letter-spacing: 0.02em;
+      background: radial-gradient(circle at center, rgba(11, 18, 32, 0.15), rgba(11, 18, 32, 0.7));
+      z-index: 2;
+      padding: 24px;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="status">Route wird geladen...</div>
   <script>
     let map;
     let ready = false;
     let animationFrameId = null;
+    const statusEl = document.getElementById('status');
 
     const CAMERA_CONFIG = {
       pitch: 74,
@@ -38,6 +55,13 @@
 
       map.on('load', () => {
         ready = true;
+        statusEl.textContent = 'Route wird angezeigt...';
+      });
+
+      map.on('error', (event) => {
+        if (event && event.error) {
+          statusEl.textContent = 'Karte konnte nicht geladen werden.';
+        }
       });
     }
 
@@ -81,9 +105,7 @@
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        const img = new Image();
-        img.src = canvas.toDataURL('image/png');
-        return img;
+        return ctx.getImageData(0, 0, size, size);
       } catch (e) {
         return null;
       }
@@ -157,6 +179,7 @@
     }
 
     function renderRoute(routePointsJson, key, durationSec) {
+      statusEl.textContent = 'Route wird geladen...';
       ensureMap(key);
       const points = JSON.parse(routePointsJson || '[]');
       const coords = points
@@ -166,6 +189,11 @@
       const run = () => {
         if (!ready) {
           setTimeout(run, 100);
+          return;
+        }
+
+        if (coords.length === 0) {
+          statusEl.textContent = 'Keine GPX-Route gefunden.';
           return;
         }
 
@@ -180,6 +208,7 @@
         stopRouteHeadAnimation();
         if (map.getLayer('routeHead')) map.removeLayer('routeHead');
         if (map.getLayer('routeHeadGlow')) map.removeLayer('routeHeadGlow');
+        if (map.getLayer('routeHeadIcon')) map.removeLayer('routeHeadIcon');
         if (map.getLayer('routeLine')) map.removeLayer('routeLine');
         if (map.getSource('routeHead')) map.removeSource('routeHead');
         if (map.getSource('route')) map.removeSource('route');
@@ -198,14 +227,6 @@
 
         if (coords.length > 0) {
           const head = coords[0];
-            type: 'circle',
-            source: 'routeHead',
-            paint: {
-              'circle-radius': 6,
-              'circle-color': '#fff36d',
-              'circle-stroke-width': 1,
-              'circle-stroke-color': '#f59e0b'
-            }
           map.addSource('routeHead', {
             type: 'geojson',
             data: {
@@ -241,18 +262,20 @@
           // add an arrow icon layer for oriented route head if possible
           try {
             const arrowImg = createArrowImage();
-            if (arrowImg) map.addImage('routeArrow', arrowImg);
-            map.addLayer({
-              id: 'routeHeadIcon',
-              type: 'symbol',
-              source: 'routeHead',
-              layout: {
-                'icon-image': 'routeArrow',
-                'icon-allow-overlap': true,
-                'icon-rotate': ['get', 'bearing'],
-                'icon-size': 0.6
-              }
-            });
+            if (arrowImg && !map.hasImage('routeArrow')) map.addImage('routeArrow', arrowImg, { pixelRatio: 1 });
+            if (map.hasImage('routeArrow')) {
+              map.addLayer({
+                id: 'routeHeadIcon',
+                type: 'symbol',
+                source: 'routeHead',
+                layout: {
+                  'icon-image': 'routeArrow',
+                  'icon-allow-overlap': true,
+                  'icon-rotate': ['get', 'bearing'],
+                  'icon-size': 0.6
+                }
+              });
+            }
           } catch (e) {
             // ignore if symbols/images are not supported
           }
@@ -263,6 +286,7 @@
           map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
           map.easeTo({ pitch: CAMERA_CONFIG.pitch, duration: 0 });
           animateRouteHead(coords, durationSec);
+          statusEl.textContent = 'Route wird angezeigt...';
         }
       };
 
