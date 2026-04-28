@@ -311,7 +311,7 @@ private fun OverlayApp() {
                     OverlayScreen.Import -> {
                         ImportActivityStep(
                             onImport = {
-                                gpxPicker.launch(arrayOf("application/gpx+xml"))
+                                gpxPicker.launch(arrayOf("application/gpx+xml", "application/octet-stream", "application/xml", "text/xml", "*/*"))
                             },
                         )
                     }
