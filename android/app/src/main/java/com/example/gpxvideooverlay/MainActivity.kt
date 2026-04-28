@@ -74,6 +74,8 @@ import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 
 private enum class OverlayScreen {
     Import,
@@ -471,7 +473,15 @@ private fun OverlayApp() {
 
     // If preview is ready, show an interactive preview player instead of the static step
     if (currentScreen == OverlayScreen.Preview && previewReady) {
-        PreviewPlayer(previewMedia = previewMedia, totalDurationSec = videoDurationSec, speedFactor = speedFactor)
+        val startMs = selectedActivity?.startedAtMs ?: previewMedia.firstOrNull()?.capturedAtMs ?: System.currentTimeMillis()
+        val endMs = selectedActivity?.endedAtMs ?: previewMedia.firstOrNull()?.capturedAtMs ?: (startMs + 1)
+        PreviewPlayer(
+            previewMedia = previewMedia,
+            totalDurationSec = videoDurationSec,
+            speedFactor = speedFactor,
+            activityStartMs = startMs,
+            activityEndMs = endMs,
+        )
     }
 }
 
@@ -745,52 +755,112 @@ private fun exportPreviewAsZip(context: Context, media: List<MediaItem>): String
 // We keep ZIP export as a reliable fallback until FFmpeg is added correctly.
 
 @Composable
-private fun PreviewPlayer(previewMedia: List<MediaItem>, totalDurationSec: Float, speedFactor: Float) {
+private fun PreviewPlayer(
+    previewMedia: List<MediaItem>,
+    totalDurationSec: Float,
+    speedFactor: Float,
+    activityStartMs: Long,
+    activityEndMs: Long,
+) {
     val context = LocalContext.current
     val count = previewMedia.size
+    // Build timeline events aligned to activity time range
+    val startMs = activityStartMs
+    val endMs = if (activityEndMs > startMs) activityEndMs else (startMs + 1)
+    data class Event(val media: MediaItem, val timeSec: Float)
+    val events = remember(previewMedia, startMs, endMs, totalDurationSec) {
+        previewMedia.mapNotNull { m ->
+            val pos = ((m.capturedAtMs - startMs).coerceIn(0L, endMs - startMs).toDouble() / (endMs - startMs).toDouble())
+            val t = (pos * totalDurationSec).toFloat()
+            Event(m, t)
+        }.sortedBy { it.timeSec }
+    }
+
     var playing by remember { mutableStateOf(false) }
-    var index by remember { mutableIntStateOf(0) }
-    val effectiveDuration = if (speedFactor > 0f) (totalDurationSec / speedFactor) else totalDurationSec
-    val frameMs = if (count > 0) (effectiveDuration * 1000 / count).toLong() else 1000L
+    var currentTime by remember { mutableStateOf(0f) }
+    var shownIds by remember { mutableStateOf(setOf<String>()) }
+    var showingMedia by remember { mutableStateOf<MediaItem?>(null) }
+    var showEndAt by remember { mutableStateOf(0f) }
+    val showDuration = 2.5f
 
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(playing, index, count, frameMs) {
-        if (playing && count > 0) {
-            kotlinx.coroutines.delay(frameMs)
-            index = (index + 1) % count
+    LaunchedEffect(playing) {
+        while (playing) {
+            delay(200)
+            currentTime += 0.2f * speedFactor
+            // trigger events
+            events.forEach { ev ->
+                if (!shownIds.contains(ev.media.id) && currentTime >= ev.timeSec) {
+                    shownIds = shownIds + ev.media.id
+                    showingMedia = ev.media
+                    showEndAt = currentTime + showDuration
+                }
+            }
+            if (showingMedia != null && currentTime >= showEndAt) {
+                showingMedia = null
+            }
+            if (currentTime >= totalDurationSec) {
+                playing = false
+            }
         }
     }
 
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("3. Video-Preview (Player)", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-            if (count == 0) {
-                Text("Keine Bilder fuer die Vorschau.", color = Color(0xFFB7C7D8))
-            } else {
-                AsyncImage(model = previewMedia[index].uri, contentDescription = previewMedia[index].displayName, modifier = Modifier
-                    .height(240.dp)
-                    .fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { playing = !playing }) {
-                        Text(if (playing) "Pause" else "Play")
+            Text("3. Route-Preview", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            Text("Die Route ist die Hauptanzeige; Bilder werden kurz an ihrem Aufnahmezeitpunkt eingeblendet.", color = Color(0xFFB7C7D8))
+
+            // Simple route timeline visualization (placeholder)
+            androidx.compose.material3.Slider(value = (currentTime / (if (totalDurationSec > 0f) totalDurationSec else 1f)).coerceIn(0f, 1f), onValueChange = { frac ->
+                currentTime = frac * totalDurationSec
+            })
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { playing = !playing }) { Text(if (playing) "Pause" else "Play") }
+                Text("${(currentTime).toInt()}s / ${totalDurationSec.toInt()}s", color = Color(0xFFB7C7D8))
+            }
+
+            // Overlay area for showing media briefly
+            Box(modifier = Modifier
+                .height(240.dp)
+                .fillMaxWidth(), contentAlignment = Alignment.Center) {
+                // Placeholder route view: simple line
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(80.dp)) {
+                    val canvasSize = size
+                    val y = canvasSize.height / 2f
+                    drawLine(
+                        color = Color(0xFF7E95B4),
+                        start = androidx.compose.ui.geometry.Offset(0f, y),
+                        end = androidx.compose.ui.geometry.Offset(canvasSize.width, y),
+                        strokeWidth = 6f,
+                    )
+                    // draw markers for events
+                    events.forEach { ev ->
+                        val frac = if (totalDurationSec > 0f) (ev.timeSec / totalDurationSec) else 0f
+                        val x = frac * canvasSize.width
+                        drawCircle(color = Color(0xFFF5C84C), radius = 6f, center = androidx.compose.ui.geometry.Offset(x, y))
                     }
-                    androidx.compose.material3.Slider(value = if (count > 1) index.toFloat() / (count - 1) else 0f, onValueChange = { frac ->
-                        val pos = (frac * (if (count > 1) (count - 1) else 1)).toInt()
-                        index = pos
-                    })
-                    Text("${index + 1}/$count", color = Color(0xFFB7C7D8))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        coroutineScope.launch {
-                            val path = exportPreviewAsZip(context, previewMedia)
-                            if (path != null) shareSummary(context, "ZIP Export erstellt: $path") else shareSummary(context, "Export fehlgeschlagen.")
+
+                if (showingMedia != null) {
+                    val scale by animateFloatAsState(targetValue = 1f, animationSpec = tween(350))
+                    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF101826))) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
+                            AsyncImage(model = showingMedia!!.uri, contentDescription = showingMedia!!.displayName, modifier = Modifier.height(160.dp).fillMaxWidth())
+                            Text(showingMedia!!.displayName, color = Color.White)
                         }
-                    }) {
-                        Text("Export als ZIP")
                     }
                 }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    coroutineScope.launch {
+                        val path = exportPreviewAsZip(context, previewMedia)
+                        if (path != null) shareSummary(context, "ZIP Export erstellt: $path") else shareSummary(context, "Export fehlgeschlagen.")
+                    }
+                }) { Text("Export als ZIP") }
             }
         }
     }
