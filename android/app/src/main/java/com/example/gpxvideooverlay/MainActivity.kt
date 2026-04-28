@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Image
@@ -35,9 +36,12 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -67,6 +71,14 @@ import com.example.gpxvideooverlay.data.SampleRepository
 import com.example.gpxvideooverlay.data.TimestampMode
 import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
 
+private enum class OverlayScreen {
+    Import,
+    Media,
+    Preview,
+    Settings,
+    Export,
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,12 +90,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OverlayApp() {
     val context = LocalContext.current
     val appContext = context.applicationContext
     val repository = remember(appContext) { SampleRepository(appContext) }
 
+    var currentScreen by remember { mutableStateOf(OverlayScreen.Import) }
     var selectedActivityId by remember { mutableStateOf<String?>(null) }
     var statusMessage by remember { mutableStateOf("Bereit: Aktivitaet importieren") }
     var timestampMode by remember { mutableStateOf(TimestampMode.Exif) }
@@ -99,26 +113,30 @@ private fun OverlayApp() {
 
     var previewReady by remember { mutableStateOf(false) }
     var previewImageCount by remember { mutableIntStateOf(0) }
+    var isProcessing by remember { mutableStateOf(false) }
+    var processingMessage by remember { mutableStateOf("Lade...") }
 
     var pendingGalleryAutoAssignActivityId by remember { mutableStateOf<String?>(null) }
 
     val activities = repository.activities
-    val selectedActivity = activities.firstOrNull { it.id == selectedActivityId } ?: activities.firstOrNull()
+    val selectedActivity = activities.firstOrNull { it.id == selectedActivityId }
     val selectedMedia = selectedActivity?.let { repository.mediaForActivity(it.id) }.orEmpty()
-
-    if (selectedActivityId == null && selectedActivity != null) {
-        selectedActivityId = selectedActivity.id
-    }
 
     fun runGalleryAutoAssign(activityId: String) {
         val permission = galleryPermissionForDevice()
         val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         if (granted) {
-            val (assigned, scanned) = repository.importGalleryPhotosForActivity(activityId)
-            statusMessage = if (assigned > 0) {
-                "$assigned Bilder aus Galerie automatisch zugeordnet ($scanned geprueft)."
-            } else {
-                "Keine passenden Galerie-Bilder im Aktivitaetszeitraum gefunden."
+            isProcessing = true
+            processingMessage = "Galerie wird durchsucht..."
+            try {
+                val (assigned, scanned) = repository.importGalleryPhotosForActivity(activityId)
+                statusMessage = if (assigned > 0) {
+                    "$assigned Bilder aus Galerie automatisch zugeordnet ($scanned geprueft)."
+                } else {
+                    "Keine passenden Galerie-Bilder im Aktivitaetszeitraum gefunden."
+                }
+            } finally {
+                isProcessing = false
             }
         } else {
             pendingGalleryAutoAssignActivityId = activityId
@@ -128,11 +146,17 @@ private fun OverlayApp() {
     val permissionLauncher = rememberLauncherForActivityResult(RequestPermission()) { granted ->
         val targetActivityId = pendingGalleryAutoAssignActivityId
         if (granted && targetActivityId != null) {
-            val (assigned, scanned) = repository.importGalleryPhotosForActivity(targetActivityId)
-            statusMessage = if (assigned > 0) {
-                "$assigned Bilder aus Galerie automatisch zugeordnet ($scanned geprueft)."
-            } else {
-                "Galerie gelesen, aber keine passenden Bilder im Aktivitaetszeitraum gefunden."
+            isProcessing = true
+            processingMessage = "Galerie wird durchsucht..."
+            try {
+                val (assigned, scanned) = repository.importGalleryPhotosForActivity(targetActivityId)
+                statusMessage = if (assigned > 0) {
+                    "$assigned Bilder aus Galerie automatisch zugeordnet ($scanned geprueft)."
+                } else {
+                    "Galerie gelesen, aber keine passenden Bilder im Aktivitaetszeitraum gefunden."
+                }
+            } finally {
+                isProcessing = false
             }
         } else if (!granted) {
             statusMessage = "Ohne Galerie-Berechtigung ist die automatische Bildsuche nicht moeglich."
@@ -148,16 +172,25 @@ private fun OverlayApp() {
 
         persistReadPermission(appContext, uri)
         val name = queryDisplayName(appContext, uri) ?: "Importiert"
-        val imported = try {
-            repository.importGpxFromUri(uri, name)
-        } catch (_: IllegalArgumentException) {
-            statusMessage = "Die ausgewaehlte Datei ist kein gueltiges GPX."
-            return@rememberLauncherForActivityResult
+        isProcessing = true
+        processingMessage = "GPX wird importiert..."
+        var importedActivity: ActivityItem? = null
+        try {
+            importedActivity = try {
+                repository.importGpxFromUri(uri, name)
+            } catch (_: IllegalArgumentException) {
+                statusMessage = "Die ausgewaehlte Datei ist kein gueltiges GPX."
+                return@rememberLauncherForActivityResult
+            }
+            selectedActivityId = importedActivity?.id
+            currentScreen = OverlayScreen.Media
+            previewReady = false
+            statusMessage = "Aktivitaet importiert: ${importedActivity?.title}. Suche automatisch passende Galerie-Bilder..."
+        } finally {
+            isProcessing = false
         }
-        selectedActivityId = imported.id
-        previewReady = false
-        statusMessage = "Aktivitaet importiert: ${imported.title}. Suche automatisch passende Galerie-Bilder..."
 
+        val imported = importedActivity ?: return@rememberLauncherForActivityResult
         val permission = galleryPermissionForDevice()
         val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         if (granted) {
@@ -176,19 +209,83 @@ private fun OverlayApp() {
         }
 
         uris.forEach { persistReadPermission(appContext, it) }
-        val imported = repository.importPhotosToActivity(activityId, uris, timestampMode)
-        previewReady = false
-        statusMessage = if (imported > 0) {
-            "$imported Bilder manuell hinzugefuegt."
-        } else {
-            "Keine neuen Bilder hinzugefuegt."
+        isProcessing = true
+        processingMessage = "Bilder werden importiert..."
+        try {
+            val imported = repository.importPhotosToActivity(activityId, uris, timestampMode)
+            previewReady = false
+            statusMessage = if (imported > 0) {
+                "$imported Bilder manuell hinzugefuegt."
+            } else {
+                "Keine neuen Bilder hinzugefuegt."
+            }
+        } finally {
+            isProcessing = false
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    if (currentScreen != OverlayScreen.Import) {
+                        IconButton(onClick = {
+                            currentScreen = when (currentScreen) {
+                                OverlayScreen.Media -> OverlayScreen.Import
+                                OverlayScreen.Preview -> OverlayScreen.Media
+                                OverlayScreen.Settings -> OverlayScreen.Preview
+                                OverlayScreen.Export -> OverlayScreen.Settings
+                                OverlayScreen.Import -> OverlayScreen.Import
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Zurueck")
+                        }
+                    }
+                },
                 title = { Text("GPX Video Overlay") },
+                actions = {
+                    when (currentScreen) {
+                        OverlayScreen.Media -> {
+                            TextButton(onClick = {
+                                if (selectedActivity == null) {
+                                    statusMessage = "Bitte zuerst eine Aktivitaet importieren."
+                                } else if (selectedMedia.isEmpty()) {
+                                    statusMessage = "Keine Bilder vorhanden. Bitte zuerst Bilder laden."
+                                } else {
+                                    currentScreen = OverlayScreen.Preview
+                                }
+                            }) {
+                                Text("Preview")
+                            }
+                        }
+
+                        OverlayScreen.Preview -> {
+                            TextButton(onClick = { currentScreen = OverlayScreen.Settings }) {
+                                Text("Weiter")
+                            }
+                        }
+
+                        OverlayScreen.Settings -> {
+                            TextButton(onClick = { currentScreen = OverlayScreen.Export }) {
+                                Text("Export")
+                            }
+                        }
+
+                        OverlayScreen.Export -> {
+                            TextButton(onClick = {
+                                if (!previewReady) {
+                                    statusMessage = "Bitte zuerst die Video-Preview generieren."
+                                } else {
+                                    statusMessage = "Export gestartet (Platzhalter): $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x."
+                                }
+                            }) {
+                                Text("Export")
+                            }
+                        }
+
+                        OverlayScreen.Import -> Unit
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF101826),
                     titleContentColor = Color.White,
@@ -207,106 +304,119 @@ private fun OverlayApp() {
                 .padding(padding)
                 .padding(16.dp),
         ) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                item {
-                    StatusCard(statusMessage)
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatusCard(statusMessage)
 
-                item {
-                    ImportActivityStep(
-                        selectedActivity = selectedActivity,
-                        onImport = {
-                            gpxPicker.launch(arrayOf("application/gpx+xml"))
-                        },
-                    )
-                }
+                when (currentScreen) {
+                    OverlayScreen.Import -> {
+                        ImportActivityStep(
+                            onImport = {
+                                gpxPicker.launch(arrayOf("application/gpx+xml"))
+                            },
+                        )
+                    }
 
-                item {
-                    MediaStep(
-                        selectedActivity = selectedActivity,
-                        media = selectedMedia,
-                        timestampMode = timestampMode,
-                        onTimestampModeSelected = { timestampMode = it },
-                        onImportMore = {
-                            manualImagePicker.launch(arrayOf("image/*"))
-                        },
-                        onAutoAssignFromGallery = {
-                            val activityId = selectedActivityId
-                            if (activityId == null) {
-                                statusMessage = "Bitte zuerst eine Aktivitaet importieren."
-                            } else {
-                                val permission = galleryPermissionForDevice()
-                                val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-                                if (granted) {
-                                    runGalleryAutoAssign(activityId)
+                    OverlayScreen.Media -> {
+                        MediaStep(
+                            selectedActivity = selectedActivity,
+                            media = selectedMedia,
+                            timestampMode = timestampMode,
+                            onTimestampModeSelected = { timestampMode = it },
+                            onImportMore = {
+                                manualImagePicker.launch(arrayOf("image/*"))
+                            },
+                            onAutoAssignFromGallery = {
+                                val activityId = selectedActivityId
+                                if (activityId == null) {
+                                    statusMessage = "Bitte zuerst eine Aktivitaet importieren."
                                 } else {
-                                    pendingGalleryAutoAssignActivityId = activityId
-                                    permissionLauncher.launch(permission)
+                                    val permission = galleryPermissionForDevice()
+                                    val granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                                    if (granted) {
+                                        runGalleryAutoAssign(activityId)
+                                    } else {
+                                        pendingGalleryAutoAssignActivityId = activityId
+                                        permissionLauncher.launch(permission)
+                                    }
                                 }
-                            }
-                        },
-                    )
+                            },
+                        )
+                    }
+
+                    OverlayScreen.Preview -> {
+                        PreviewStep(
+                            selectedActivity = selectedActivity,
+                            mediaCount = selectedMedia.size,
+                            onGeneratePreview = {
+                                if (selectedActivity == null) {
+                                    statusMessage = "Bitte zuerst eine Aktivitaet importieren."
+                                    return@PreviewStep
+                                }
+                                if (selectedMedia.isEmpty()) {
+                                    statusMessage = "Keine Bilder vorhanden. Bitte zuerst Bilder laden."
+                                    return@PreviewStep
+                                }
+
+                                reviewMedia = selectedMedia
+                                excludedMediaIds = emptySet()
+                                showReviewDialog = true
+                            },
+                        )
+                    }
+
+                    OverlayScreen.Settings -> {
+                        SettingsStep(
+                            settingsOpen = settingsOpen,
+                            exportFormat = exportFormat,
+                            videoDurationSec = videoDurationSec,
+                            speedFactor = speedFactor,
+                            onToggleOpen = { settingsOpen = !settingsOpen },
+                            onFormatChange = { exportFormat = it },
+                            onDurationChange = { videoDurationSec = it },
+                            onSpeedChange = { speedFactor = it },
+                        )
+                    }
+
+                    OverlayScreen.Export -> {
+                        ExportStep(
+                            previewReady = previewReady,
+                            previewImageCount = previewImageCount,
+                            format = exportFormat,
+                            durationSec = videoDurationSec.toInt(),
+                            speedFactor = speedFactor,
+                            onExport = {
+                                if (!previewReady) {
+                                    statusMessage = "Bitte zuerst die Video-Preview generieren."
+                                } else {
+                                    statusMessage = "Export gestartet (Platzhalter): $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x."
+                                }
+                            },
+                            onShare = {
+                                if (!previewReady) {
+                                    statusMessage = "Bitte zuerst die Video-Preview generieren."
+                                } else {
+                                    shareSummary(
+                                        context = context,
+                                        text = "GPX Video vorbereitet: $previewImageCount Bilder, $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x",
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
+            }
+        }
 
-                item {
-                    PreviewStep(
-                        selectedActivity = selectedActivity,
-                        mediaCount = selectedMedia.size,
-                        onGeneratePreview = {
-                            if (selectedActivity == null) {
-                                statusMessage = "Bitte zuerst eine Aktivitaet importieren."
-                                return@PreviewStep
-                            }
-                            if (selectedMedia.isEmpty()) {
-                                statusMessage = "Keine Bilder vorhanden. Bitte zuerst Bilder laden."
-                                return@PreviewStep
-                            }
-
-                            reviewMedia = selectedMedia
-                            excludedMediaIds = emptySet()
-                            showReviewDialog = true
-                        },
-                    )
-                }
-
-                item {
-                    SettingsStep(
-                        settingsOpen = settingsOpen,
-                        exportFormat = exportFormat,
-                        videoDurationSec = videoDurationSec,
-                        speedFactor = speedFactor,
-                        onToggleOpen = { settingsOpen = !settingsOpen },
-                        onFormatChange = { exportFormat = it },
-                        onDurationChange = { videoDurationSec = it },
-                        onSpeedChange = { speedFactor = it },
-                    )
-                }
-
-                item {
-                    ExportStep(
-                        previewReady = previewReady,
-                        previewImageCount = previewImageCount,
-                        format = exportFormat,
-                        durationSec = videoDurationSec.toInt(),
-                        speedFactor = speedFactor,
-                        onExport = {
-                            if (!previewReady) {
-                                statusMessage = "Bitte zuerst die Video-Preview generieren."
-                            } else {
-                                statusMessage = "Export gestartet (Platzhalter): $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x."
-                            }
-                        },
-                        onShare = {
-                            if (!previewReady) {
-                                statusMessage = "Bitte zuerst die Video-Preview generieren."
-                            } else {
-                                shareSummary(
-                                    context = context,
-                                    text = "GPX Video vorbereitet: $previewImageCount Bilder, $exportFormat, ${videoDurationSec.toInt()}s, ${"%.1f".format(speedFactor)}x",
-                                )
-                            }
-                        },
-                    )
+        if (isProcessing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xAA050A12)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(color = Color(0xFFF5C84C))
+                    Text(processingMessage, color = Color.White)
                 }
             }
         }
@@ -346,7 +456,6 @@ private fun StatusCard(status: String) {
 
 @Composable
 private fun ImportActivityStep(
-    selectedActivity: ActivityItem?,
     onImport: () -> Unit,
 ) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
@@ -356,13 +465,6 @@ private fun ImportActivityStep(
             Button(onClick = onImport) {
                 Icon(Icons.Filled.FolderOpen, contentDescription = null)
                 Text(" GPX importieren")
-            }
-            if (selectedActivity != null) {
-                Text("Aktiv: ${selectedActivity.title}", color = Color(0xFFF5C84C), fontWeight = FontWeight.SemiBold)
-                Text(
-                    "Zeitfenster: ${selectedActivity.startedAtMs.toLocalDateTimeLabel()} - ${selectedActivity.endedAtMs.toLocalDateTimeLabel()}",
-                    color = Color(0xFFB7C7D8),
-                )
             }
         }
     }
