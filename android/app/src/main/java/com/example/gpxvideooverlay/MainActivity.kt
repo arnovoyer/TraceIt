@@ -439,6 +439,7 @@ private fun OverlayApp() {
         RouteMapPreview(
             routePoints = selectedRoutePoints,
             mapTilerKey = BuildConfig.MAPTILER_KEY,
+            previewDurationSec = max(8f, videoDurationSec / speedFactor),
         )
     }
 }
@@ -713,6 +714,7 @@ private fun exportPreviewAsZip(context: Context, media: List<MediaItem>): String
 private fun RouteMapPreview(
     routePoints: List<RoutePoint>,
     mapTilerKey: String,
+    previewDurationSec: Float,
 ) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -741,7 +743,7 @@ private fun RouteMapPreview(
                                     }
                                 }.toString()
                                 view?.evaluateJavascript(
-                                    "window.renderRoute(${org.json.JSONObject.quote(pointsJson)}, ${org.json.JSONObject.quote(mapTilerKey)});",
+                                    "window.renderRoute(${org.json.JSONObject.quote(pointsJson)}, ${org.json.JSONObject.quote(mapTilerKey)}, ${previewDurationSec});",
                                     null,
                                 )
                             }

@@ -15,6 +15,7 @@
   <script>
     let map;
     let ready = false;
+    let animationFrameId = null;
 
     const CAMERA_CONFIG = {
       pitch: 74,
@@ -40,7 +41,48 @@
       });
     }
 
-    function renderRoute(routePointsJson, key) {
+    function stopRouteHeadAnimation() {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    }
+
+    function animateRouteHead(coords, durationSec) {
+      if (!map || coords.length < 2 || !map.getSource('routeHead')) return;
+      stopRouteHeadAnimation();
+
+      const totalMs = Math.max(4000, Number(durationSec || 45) * 1000);
+      const segmentCount = coords.length - 1;
+      const startedAt = performance.now();
+
+      const tick = (now) => {
+        const elapsed = (now - startedAt) % totalMs;
+        const progress = elapsed / totalMs;
+        const floatingIndex = progress * segmentCount;
+        const idx = Math.floor(floatingIndex);
+        const localT = floatingIndex - idx;
+
+        const p0 = coords[idx];
+        const p1 = coords[Math.min(idx + 1, segmentCount)];
+        const lon = p0[0] + (p1[0] - p0[0]) * localT;
+        const lat = p0[1] + (p1[1] - p0[1]) * localT;
+
+        const source = map.getSource('routeHead');
+        if (source) {
+          source.setData({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [lon, lat] }
+          });
+        }
+
+        animationFrameId = requestAnimationFrame(tick);
+      };
+
+      animationFrameId = requestAnimationFrame(tick);
+    }
+
+    function renderRoute(routePointsJson, key, durationSec) {
       ensureMap(key);
       const points = JSON.parse(routePointsJson || '[]');
       const coords = points
@@ -61,6 +103,7 @@
           }
         };
 
+        stopRouteHeadAnimation();
         if (map.getLayer('routeHead')) map.removeLayer('routeHead');
         if (map.getLayer('routeHeadGlow')) map.removeLayer('routeHeadGlow');
         if (map.getLayer('routeLine')) map.removeLayer('routeLine');
@@ -117,6 +160,7 @@
           const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
           map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
           map.easeTo({ pitch: CAMERA_CONFIG.pitch, duration: 0 });
+          animateRouteHead(coords, durationSec);
         }
       };
 
