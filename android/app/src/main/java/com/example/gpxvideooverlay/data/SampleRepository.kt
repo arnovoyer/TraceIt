@@ -19,6 +19,7 @@ import java.util.Locale
 private data class StoreState(
     val activities: List<ActivityItem>,
     val media: List<MediaItem>,
+    val routePointsByActivity: Map<String, List<RoutePoint>>,
 )
 
 class SampleRepository(private val context: Context) {
@@ -30,10 +31,14 @@ class SampleRepository(private val context: Context) {
     var mediaItems by mutableStateOf<List<MediaItem>>(emptyList())
         private set
 
+    var routePointsByActivity by mutableStateOf<Map<String, List<RoutePoint>>>(emptyMap())
+        private set
+
     init {
         val state = loadState()
         activities = state.activities.sortedByDescending { it.startedAtMs }
         mediaItems = state.media
+        routePointsByActivity = state.routePointsByActivity
     }
 
     fun connectStravaPlaceholder(): String {
@@ -46,9 +51,13 @@ class SampleRepository(private val context: Context) {
         if (!gpxMeta.isGpx) {
             throw IllegalArgumentException("Die ausgewaehlte Datei ist kein GPX.")
         }
+        val parsedPoints = parseGpxRoutePoints(uri, context)
         val now = System.currentTimeMillis()
-        val startedAt = gpxMeta.startMs ?: now
+        val parsedStart = parsedPoints.firstOrNull { it.timeMs != null }?.timeMs
+        val parsedEnd = parsedPoints.lastOrNull { it.timeMs != null }?.timeMs
+        val startedAt = parsedStart ?: gpxMeta.startMs ?: now
         val endedAt = when {
+            parsedEnd != null && parsedEnd >= startedAt -> parsedEnd
             gpxMeta.endMs != null && gpxMeta.endMs >= startedAt -> gpxMeta.endMs
             else -> startedAt + DEFAULT_ACTIVITY_DURATION_MS
         }
@@ -64,8 +73,13 @@ class SampleRepository(private val context: Context) {
         )
 
         activities = listOf(item) + activities
+        routePointsByActivity = routePointsByActivity + (item.id to parsedPoints)
         persist()
         return item
+    }
+
+    fun routePointsForActivity(activityId: String): List<RoutePoint> {
+        return routePointsByActivity[activityId].orEmpty()
     }
 
     fun importPhotosToActivity(activityId: String, uris: List<Uri>, mode: TimestampMode): Int {
@@ -281,17 +295,18 @@ class SampleRepository(private val context: Context) {
 
     private fun loadState(): StoreState {
         if (!storageFile.exists()) {
-            return StoreState(emptyList(), emptyList())
+            return StoreState(emptyList(), emptyList(), emptyMap())
         }
 
         return try {
             val raw = storageFile.readText()
             if (raw.isBlank()) {
-                StoreState(emptyList(), emptyList())
+                StoreState(emptyList(), emptyList(), emptyMap())
             } else {
                 val root = JSONObject(raw)
                 val actsArray = root.optJSONArray("activities") ?: JSONArray()
                 val mediaArray = root.optJSONArray("media") ?: JSONArray()
+                val routesObject = root.optJSONObject("routes") ?: JSONObject()
 
                 val acts = buildList {
                     for (i in 0 until actsArray.length()) {
@@ -304,10 +319,23 @@ class SampleRepository(private val context: Context) {
                     }
                 }
 
-                StoreState(acts, media)
+                val routes = mutableMapOf<String, List<RoutePoint>>()
+                val keys = routesObject.keys()
+                while (keys.hasNext()) {
+                    val activityId = keys.next()
+                    val pointsArray = routesObject.optJSONArray(activityId) ?: JSONArray()
+                    val points = buildList {
+                        for (i in 0 until pointsArray.length()) {
+                            add(pointsArray.getJSONObject(i).toRoutePoint())
+                        }
+                    }
+                    routes[activityId] = points
+                }
+
+                StoreState(acts, media, routes)
             }
         } catch (_: Exception) {
-            StoreState(emptyList(), emptyList())
+            StoreState(emptyList(), emptyList(), emptyMap())
         }
     }
 
@@ -318,6 +346,13 @@ class SampleRepository(private val context: Context) {
             })
             put("media", JSONArray().also { array ->
                 mediaItems.forEach { array.put(it.toJson()) }
+            })
+            put("routes", JSONObject().also { routes ->
+                routePointsByActivity.forEach { (activityId, points) ->
+                    routes.put(activityId, JSONArray().also { array ->
+                        points.forEach { point -> array.put(point.toJson()) }
+                    })
+                }
             })
         }
 
@@ -374,6 +409,54 @@ private data class GpxMeta(
     val endMs: Long?,
     val isGpx: Boolean,
 )
+
+private fun RoutePoint.toJson(): JSONObject = JSONObject().apply {
+    put("lat", lat)
+    put("lon", lon)
+    if (ele != null) put("ele", ele)
+    if (timeMs != null) put("timeMs", timeMs)
+}
+
+private fun JSONObject.toRoutePoint(): RoutePoint = RoutePoint(
+    lat = getDouble("lat"),
+    lon = getDouble("lon"),
+    ele = if (has("ele")) optDouble("ele") else null,
+    timeMs = if (has("timeMs")) optLong("timeMs") else null,
+)
+
+private fun parseGpxRoutePoints(uri: Uri, context: Context): List<RoutePoint> {
+    return try {
+        val xml = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }.orEmpty()
+        if (xml.isBlank()) return emptyList()
+
+        val trackPointRegex = Regex("<trkpt\\s+[^>]*lat=\"([^\"]+)\"[^>]*lon=\"([^\"]+)\"[^>]*>(.*?)</trkpt>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+        val routePointRegex = Regex("<rtept\\s+[^>]*lat=\"([^\"]+)\"[^>]*lon=\"([^\"]+)\"[^>]*>(.*?)</rtept>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+        val eleRegex = Regex("<ele>([^<]+)</ele>", RegexOption.IGNORE_CASE)
+        val timeRegex = Regex("<time>([^<]+)</time>", RegexOption.IGNORE_CASE)
+
+        fun parsePoints(matches: Sequence<MatchResult>): List<RoutePoint> {
+            return matches.mapNotNull { m ->
+                val lat = m.groupValues.getOrNull(1)?.toDoubleOrNull() ?: return@mapNotNull null
+                val lon = m.groupValues.getOrNull(2)?.toDoubleOrNull() ?: return@mapNotNull null
+                val inner = m.groupValues.getOrNull(3).orEmpty()
+                val ele = eleRegex.find(inner)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+                val timeMs = timeRegex.find(inner)?.groupValues?.getOrNull(1)?.let { raw ->
+                    try {
+                        Instant.parse(raw.trim()).toEpochMilli()
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                RoutePoint(lat = lat, lon = lon, ele = ele, timeMs = timeMs)
+            }.toList()
+        }
+
+        val trkPoints = parsePoints(trackPointRegex.findAll(xml))
+        if (trkPoints.isNotEmpty()) trkPoints else parsePoints(routePointRegex.findAll(xml))
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
 
 enum class TimestampMode {
     Exif,

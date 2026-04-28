@@ -14,10 +14,14 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        val mapTilerKey = (project.findProperty("MAPTILER_KEY") as String?) ?: ""
+        buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

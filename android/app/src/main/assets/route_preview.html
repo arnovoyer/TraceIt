@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Route Preview</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <style>
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #0b1220; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    let map;
+    let ready = false;
+
+    function ensureMap(key) {
+      if (map) return;
+      const style = key
+        ? `https://api.maptiler.com/maps/satellite/style.json?key=${key}`
+        : 'https://demotiles.maplibre.org/style.json';
+
+      map = new maplibregl.Map({
+        container: 'map',
+        style,
+        center: [8.2, 47.0],
+        zoom: 11,
+        pitch: 60
+      });
+
+      map.on('load', () => {
+        ready = true;
+      });
+    }
+
+    function renderRoute(routePointsJson, key) {
+      ensureMap(key);
+      const points = JSON.parse(routePointsJson || '[]');
+      const coords = points
+        .map(p => [Number(p.lon), Number(p.lat)])
+        .filter(c => Number.isFinite(c[0]) && Number.isFinite(c[1]));
+
+      const run = () => {
+        if (!ready) {
+          setTimeout(run, 100);
+          return;
+        }
+
+        const sourceData = {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: coords
+          }
+        };
+
+        if (map.getLayer('routeLine')) map.removeLayer('routeLine');
+        if (map.getSource('route')) map.removeSource('route');
+
+        map.addSource('route', { type: 'geojson', data: sourceData });
+        map.addLayer({
+          id: 'routeLine',
+          type: 'line',
+          source: 'route',
+          paint: {
+            'line-color': '#FBBF24',
+            'line-width': 5.2,
+            'line-opacity': 0.92
+          }
+        });
+
+        if (coords.length > 1) {
+          const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+          map.fitBounds(bounds, { padding: 50, maxZoom: 15, duration: 0 });
+        }
+      };
+
+      run();
+    }
+
+    window.renderRoute = renderRoute;
+  </script>
+</body>
+</html>

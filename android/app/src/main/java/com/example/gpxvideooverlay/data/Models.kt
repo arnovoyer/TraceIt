@@ -26,3 +26,10 @@ data class MediaItem(
     val displayName: String,
     val capturedAtMs: Long,
 )
+
+data class RoutePoint(
+    val lat: Double,
+    val lon: Double,
+    val ele: Double?,
+    val timeMs: Long?,
+)

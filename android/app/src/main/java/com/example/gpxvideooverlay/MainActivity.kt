@@ -8,6 +8,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -49,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -68,14 +71,15 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.gpxvideooverlay.data.ActivityItem
 import com.example.gpxvideooverlay.data.MediaItem
+import com.example.gpxvideooverlay.data.RoutePoint
 import com.example.gpxvideooverlay.data.SampleRepository
 import com.example.gpxvideooverlay.data.TimestampMode
 import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import org.json.JSONArray
+import kotlin.math.max
 
 private enum class OverlayScreen {
     Import,
@@ -130,6 +134,7 @@ private fun OverlayApp() {
     val activities = repository.activities
     val selectedActivity = activities.firstOrNull { it.id == selectedActivityId }
     val selectedMedia = selectedActivity?.let { repository.mediaForActivity(it.id) }.orEmpty()
+    val selectedRoutePoints = selectedActivity?.let { repository.routePointsForActivity(it.id) }.orEmpty()
 
     fun runGalleryAutoAssign(activityId: String) {
         val permission = galleryPermissionForDevice()
@@ -258,8 +263,8 @@ private fun OverlayApp() {
                             TextButton(onClick = {
                                 if (selectedActivity == null) {
                                     statusMessage = "Bitte zuerst eine Aktivitaet importieren."
-                                } else if (selectedMedia.isEmpty()) {
-                                    statusMessage = "Keine Bilder vorhanden. Bitte zuerst Bilder laden."
+                                } else if (selectedRoutePoints.size < 2) {
+                                    statusMessage = "Diese Aktivitaet hat zu wenige GPX-Punkte fuer die Kartenansicht."
                                 } else {
                                     currentScreen = OverlayScreen.Preview
                                 }
@@ -355,30 +360,18 @@ private fun OverlayApp() {
                     OverlayScreen.Preview -> {
                         PreviewStep(
                             selectedActivity = selectedActivity,
-                            mediaCount = selectedMedia.size,
+                            mediaCount = selectedRoutePoints.size,
                             onGeneratePreview = {
                                 if (selectedActivity == null) {
                                     statusMessage = "Bitte zuerst eine Aktivitaet importieren."
                                     return@PreviewStep
                                 }
-                                // If a preview was already created, don't reopen the review dialog automatically
-                                if (previewReady) {
-                                    statusMessage = "Preview bereits erstellt. Du kannst exportieren oder teilen."
+                                if (selectedRoutePoints.size < 2) {
+                                    statusMessage = "GPX-Route unvollstaendig. Bitte eine gueltige GPX-Datei importieren."
                                     return@PreviewStep
                                 }
-                                if (selectedMedia.isEmpty()) {
-                                    // Allow preview without images: create an empty preview
-                                    previewMedia = emptyList()
-                                    previewImageCount = 0
-                                    previewReady = true
-                                    statusMessage = "Preview erstellt (keine Bilder)."
-                                    return@PreviewStep
-                                }
-
-                                // Existing flow when images are present
-                                reviewMedia = selectedMedia
-                                excludedMediaIds = emptySet()
-                                showReviewDialog = true
+                                previewReady = true
+                                statusMessage = "Karten-Preview bereit."
                             },
                         )
                     }
@@ -441,46 +434,11 @@ private fun OverlayApp() {
         }
     }
 
-    if (showReviewDialog) {
-        VideoReviewDialog(
-            media = reviewMedia,
-            excludedIds = excludedMediaIds,
-            onToggle = { id ->
-                excludedMediaIds = if (excludedMediaIds.contains(id)) {
-                    excludedMediaIds - id
-                } else {
-                    excludedMediaIds + id
-                }
-            },
-            onDismiss = { showReviewDialog = false },
-            onConfirm = {
-                // Show processing overlay while constructing the preview
-                isProcessing = true
-                processingMessage = "Preview wird erstellt..."
-                coroutineScope.launch {
-                    delay(300)
-                    val chosen = reviewMedia.filterNot { excludedMediaIds.contains(it.id) }
-                    previewMedia = chosen
-                    previewImageCount = chosen.size
-                    previewReady = true
-                    statusMessage = "Preview erstellt mit $previewImageCount Bild(ern). Danach kannst du exportieren oder teilen."
-                    showReviewDialog = false
-                    isProcessing = false
-                }
-            },
-        )
-    }
-
-    // If preview is ready, show an interactive preview player instead of the static step
+    // Show route map preview when preview is ready.
     if (currentScreen == OverlayScreen.Preview && previewReady) {
-        val startMs = selectedActivity?.startedAtMs ?: previewMedia.firstOrNull()?.capturedAtMs ?: System.currentTimeMillis()
-        val endMs = selectedActivity?.endedAtMs ?: previewMedia.firstOrNull()?.capturedAtMs ?: (startMs + 1)
-        PreviewPlayer(
-            previewMedia = previewMedia,
-            totalDurationSec = videoDurationSec,
-            speedFactor = speedFactor,
-            activityStartMs = startMs,
-            activityEndMs = endMs,
+        RouteMapPreview(
+            routePoints = selectedRoutePoints,
+            mapTilerKey = BuildConfig.MAPTILER_KEY,
         )
     }
 }
@@ -577,15 +535,15 @@ private fun PreviewStep(
 ) {
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("3. Video-Preview", color = Color.White, style = MaterialTheme.typography.headlineSmall)
+            Text("3. Route-Preview", color = Color.White, style = MaterialTheme.typography.headlineSmall)
             Text(
-                if (selectedActivity == null) "Keine Aktivitaet ausgewaehlt." else "${selectedActivity.title} · $mediaCount Bild(er)",
+                if (selectedActivity == null) "Keine Aktivitaet ausgewaehlt." else "${selectedActivity.title} · $mediaCount GPX-Punkte",
                 color = Color(0xFFB7C7D8),
             )
-            Text("Beim Klick oeffnet sich die Bildauswahl zur finalen Kontrolle.", color = Color(0xFF7E95B4))
+            Text("Erzeugt die Kartenansicht wie in der Desktop-Version.", color = Color(0xFF7E95B4))
             Button(onClick = onGeneratePreview, enabled = selectedActivity != null) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                Text(" Preview generieren")
+                Text(" Route anzeigen")
             }
         }
     }
@@ -751,117 +709,47 @@ private fun exportPreviewAsZip(context: Context, media: List<MediaItem>): String
     }
 }
 
-// Note: MP4 export via FFmpeg was removed due to dependency resolution issues.
-// We keep ZIP export as a reliable fallback until FFmpeg is added correctly.
-
 @Composable
-private fun PreviewPlayer(
-    previewMedia: List<MediaItem>,
-    totalDurationSec: Float,
-    speedFactor: Float,
-    activityStartMs: Long,
-    activityEndMs: Long,
+private fun RouteMapPreview(
+    routePoints: List<RoutePoint>,
+    mapTilerKey: String,
 ) {
-    val context = LocalContext.current
-    val count = previewMedia.size
-    // Build timeline events aligned to activity time range
-    val startMs = activityStartMs
-    val endMs = if (activityEndMs > startMs) activityEndMs else (startMs + 1)
-    data class Event(val media: MediaItem, val timeSec: Float)
-    val events = remember(previewMedia, startMs, endMs, totalDurationSec) {
-        previewMedia.mapNotNull { m ->
-            val pos = ((m.capturedAtMs - startMs).coerceIn(0L, endMs - startMs).toDouble() / (endMs - startMs).toDouble())
-            val t = (pos * totalDurationSec).toFloat()
-            Event(m, t)
-        }.sortedBy { it.timeSec }
-    }
-
-    var playing by remember { mutableStateOf(false) }
-    var currentTime by remember { mutableStateOf(0f) }
-    var shownIds by remember { mutableStateOf(setOf<String>()) }
-    var showingMedia by remember { mutableStateOf<MediaItem?>(null) }
-    var showEndAt by remember { mutableStateOf(0f) }
-    val showDuration = 2.5f
-
-    val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(playing) {
-        while (playing) {
-            delay(200)
-            currentTime += 0.2f * speedFactor
-            // trigger events
-            events.forEach { ev ->
-                if (!shownIds.contains(ev.media.id) && currentTime >= ev.timeSec) {
-                    shownIds = shownIds + ev.media.id
-                    showingMedia = ev.media
-                    showEndAt = currentTime + showDuration
-                }
-            }
-            if (showingMedia != null && currentTime >= showEndAt) {
-                showingMedia = null
-            }
-            if (currentTime >= totalDurationSec) {
-                playing = false
-            }
-        }
-    }
-
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("3. Route-Preview", color = Color.White, style = MaterialTheme.typography.headlineSmall)
-            Text("Die Route ist die Hauptanzeige; Bilder werden kurz an ihrem Aufnahmezeitpunkt eingeblendet.", color = Color(0xFFB7C7D8))
-
-            // Simple route timeline visualization (placeholder)
-            androidx.compose.material3.Slider(value = (currentTime / (if (totalDurationSec > 0f) totalDurationSec else 1f)).coerceIn(0f, 1f), onValueChange = { frac ->
-                currentTime = frac * totalDurationSec
-            })
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = { playing = !playing }) { Text(if (playing) "Pause" else "Play") }
-                Text("${(currentTime).toInt()}s / ${totalDurationSec.toInt()}s", color = Color(0xFFB7C7D8))
+            if (routePoints.size < 2) {
+                Text("Zu wenige GPX-Punkte fuer die Kartenansicht.", color = Color(0xFFB7C7D8))
+                return@Column
             }
 
-            // Overlay area for showing media briefly
-            Box(modifier = Modifier
-                .height(240.dp)
-                .fillMaxWidth(), contentAlignment = Alignment.Center) {
-                // Placeholder route view: simple line
-                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxWidth().height(80.dp)) {
-                    val canvasSize = size
-                    val y = canvasSize.height / 2f
-                    drawLine(
-                        color = Color(0xFF7E95B4),
-                        start = androidx.compose.ui.geometry.Offset(0f, y),
-                        end = androidx.compose.ui.geometry.Offset(canvasSize.width, y),
-                        strokeWidth = 6f,
-                    )
-                    // draw markers for events
-                    events.forEach { ev ->
-                        val frac = if (totalDurationSec > 0f) (ev.timeSec / totalDurationSec) else 0f
-                        val x = frac * canvasSize.width
-                        drawCircle(color = Color(0xFFF5C84C), radius = 6f, center = androidx.compose.ui.geometry.Offset(x, y))
-                    }
-                }
-
-                if (showingMedia != null) {
-                    val scale by animateFloatAsState(targetValue = 1f, animationSpec = tween(350))
-                    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF101826))) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(8.dp)) {
-                            AsyncImage(model = showingMedia!!.uri, contentDescription = showingMedia!!.displayName, modifier = Modifier.height(160.dp).fillMaxWidth())
-                            Text(showingMedia!!.displayName, color = Color.White)
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                val pointsJson = JSONArray().apply {
+                                    routePoints.forEach { p ->
+                                        put(org.json.JSONObject().apply {
+                                            put("lat", p.lat)
+                                            put("lon", p.lon)
+                                        })
+                                    }
+                                }.toString()
+                                view?.evaluateJavascript(
+                                    "window.renderRoute(${org.json.JSONObject.quote(pointsJson)}, ${org.json.JSONObject.quote(mapTilerKey)});",
+                                    null,
+                                )
+                            }
                         }
+                        loadUrl("file:///android_asset/route_preview.html")
                     }
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = {
-                    coroutineScope.launch {
-                        val path = exportPreviewAsZip(context, previewMedia)
-                        if (path != null) shareSummary(context, "ZIP Export erstellt: $path") else shareSummary(context, "Export fehlgeschlagen.")
-                    }
-                }) { Text("Export als ZIP") }
-            }
+                },
+            )
         }
     }
 }
