@@ -353,10 +353,14 @@ private fun OverlayApp() {
                                     return@PreviewStep
                                 }
                                 if (selectedMedia.isEmpty()) {
-                                    statusMessage = "Keine Bilder vorhanden. Bitte zuerst Bilder laden."
+                                    // Allow preview without images: create an empty preview
+                                    previewImageCount = 0
+                                    previewReady = true
+                                    statusMessage = "Preview erstellt (keine Bilder)."
                                     return@PreviewStep
                                 }
 
+                                // Existing flow when images are present
                                 reviewMedia = selectedMedia
                                 excludedMediaIds = emptySet()
                                 showReviewDialog = true
