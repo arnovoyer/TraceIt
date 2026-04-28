@@ -48,13 +48,66 @@
       }
     }
 
+    function toRad(v) { return v * Math.PI / 180; }
+    function toDeg(v) { return v * 180 / Math.PI; }
+
+    function bearingBetween(a, b) {
+      // returns bearing in degrees from north
+      const lat1 = toRad(a[1]);
+      const lat2 = toRad(b[1]);
+      const dLon = toRad(b[0] - a[0]);
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+      const br = Math.atan2(y, x);
+      return (toDeg(br) + 360) % 360;
+    }
+
+    function createArrowImage() {
+      try {
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.translate(size / 2, size / 2);
+        ctx.fillStyle = '#fff36d';
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.lineTo(10, 10);
+        ctx.lineTo(0, 4);
+        ctx.lineTo(-10, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        const img = new Image();
+        img.src = canvas.toDataURL('image/png');
+        return img;
+      } catch (e) {
+        return null;
+      }
+    }
+
     function animateRouteHead(coords, durationSec) {
       if (!map || coords.length < 2 || !map.getSource('routeHead')) return;
       stopRouteHeadAnimation();
 
+      if (!map.hasImage || typeof map.addImage !== 'function') {
+        // fallback: keep using circle without rotation
+      } else {
+        if (!map.hasImage('routeArrow')) {
+          const img = createArrowImage();
+          if (img) map.addImage('routeArrow', img);
+        }
+      }
+
       const totalMs = Math.max(4000, Number(durationSec || 45) * 1000);
       const segmentCount = coords.length - 1;
       const startedAt = performance.now();
+
+      // look-ahead in number of points ahead on the polyline
+      const LOOK_AHEAD_POINTS = Math.max(3, Math.floor(coords.length / 30));
 
       const tick = (now) => {
         const elapsed = (now - startedAt) % totalMs;
@@ -68,12 +121,33 @@
         const lon = p0[0] + (p1[0] - p0[0]) * localT;
         const lat = p0[1] + (p1[1] - p0[1]) * localT;
 
+        // compute bearing in degrees
+        const br = bearingBetween(p0, p1);
+
+        // update feature with bearing property
+        const feature = {
+          type: 'Feature',
+          properties: { bearing: br },
+          geometry: { type: 'Point', coordinates: [lon, lat] }
+        };
+
         const source = map.getSource('routeHead');
-        if (source) {
-          source.setData({
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [lon, lat] }
-          });
+        if (source) source.setData(feature);
+
+        // compute look-ahead target by choosing a point further ahead on the polyline
+        const aheadIndex = Math.min(segmentCount, idx + LOOK_AHEAD_POINTS);
+        const aheadPoint = coords[aheadIndex];
+        // interpolate a bit towards the aheadPoint for smoother look-ahead
+        const targetLon = lon + (aheadPoint[0] - lon) * 0.6;
+        const targetLat = lat + (aheadPoint[1] - lat) * 0.6;
+
+        // smoothly move camera toward target center and rotate to bearing
+        try {
+          map.easeTo({ center: [targetLon, targetLat], bearing: br, pitch: CAMERA_CONFIG.pitch, duration: 300 });
+        } catch (e) {
+          // ignore easing errors on some platforms
+          map.setCenter([targetLon, targetLat]);
+          map.setPitch(CAMERA_CONFIG.pitch);
         }
 
         animationFrameId = requestAnimationFrame(tick);
@@ -124,10 +198,19 @@
 
         if (coords.length > 0) {
           const head = coords[0];
+            type: 'circle',
+            source: 'routeHead',
+            paint: {
+              'circle-radius': 6,
+              'circle-color': '#fff36d',
+              'circle-stroke-width': 1,
+              'circle-stroke-color': '#f59e0b'
+            }
           map.addSource('routeHead', {
             type: 'geojson',
             data: {
               type: 'Feature',
+              properties: { bearing: 0 },
               geometry: { type: 'Point', coordinates: head }
             }
           });
@@ -154,6 +237,25 @@
               'circle-stroke-color': '#f59e0b'
             }
           });
+
+          // add an arrow icon layer for oriented route head if possible
+          try {
+            const arrowImg = createArrowImage();
+            if (arrowImg) map.addImage('routeArrow', arrowImg);
+            map.addLayer({
+              id: 'routeHeadIcon',
+              type: 'symbol',
+              source: 'routeHead',
+              layout: {
+                'icon-image': 'routeArrow',
+                'icon-allow-overlap': true,
+                'icon-rotate': ['get', 'bearing'],
+                'icon-size': 0.6
+              }
+            });
+          } catch (e) {
+            // ignore if symbols/images are not supported
+          }
         }
 
         if (coords.length > 1) {
