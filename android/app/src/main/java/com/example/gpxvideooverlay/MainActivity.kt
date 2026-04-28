@@ -54,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +71,8 @@ import com.example.gpxvideooverlay.data.MediaItem
 import com.example.gpxvideooverlay.data.SampleRepository
 import com.example.gpxvideooverlay.data.TimestampMode
 import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private enum class OverlayScreen {
     Import,
@@ -115,6 +118,8 @@ private fun OverlayApp() {
     var previewImageCount by remember { mutableIntStateOf(0) }
     var isProcessing by remember { mutableStateOf(false) }
     var processingMessage by remember { mutableStateOf("Lade...") }
+
+    val coroutineScope = rememberCoroutineScope()
 
     var pendingGalleryAutoAssignActivityId by remember { mutableStateOf<String?>(null) }
 
@@ -352,6 +357,11 @@ private fun OverlayApp() {
                                     statusMessage = "Bitte zuerst eine Aktivitaet importieren."
                                     return@PreviewStep
                                 }
+                                // If a preview was already created, don't reopen the review dialog automatically
+                                if (previewReady) {
+                                    statusMessage = "Preview bereits erstellt. Du kannst exportieren oder teilen."
+                                    return@PreviewStep
+                                }
                                 if (selectedMedia.isEmpty()) {
                                     // Allow preview without images: create an empty preview
                                     previewImageCount = 0
@@ -439,10 +449,17 @@ private fun OverlayApp() {
             },
             onDismiss = { showReviewDialog = false },
             onConfirm = {
-                previewImageCount = reviewMedia.size - excludedMediaIds.size
-                previewReady = true
-                statusMessage = "Preview erstellt mit $previewImageCount Bild(ern). Danach kannst du exportieren oder teilen."
-                showReviewDialog = false
+                // Show processing overlay while constructing the preview
+                isProcessing = true
+                processingMessage = "Preview wird erstellt..."
+                coroutineScope.launch {
+                    delay(300)
+                    previewImageCount = reviewMedia.size - excludedMediaIds.size
+                    previewReady = true
+                    statusMessage = "Preview erstellt mit $previewImageCount Bild(ern). Danach kannst du exportieren oder teilen."
+                    showReviewDialog = false
+                    isProcessing = false
+                }
             },
         )
     }
