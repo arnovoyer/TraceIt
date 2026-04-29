@@ -9,6 +9,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.webkit.WebChromeClient
+import android.webkit.ConsoleMessage
+import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
@@ -742,7 +744,19 @@ private fun RouteMapPreview(
                         settings.allowFileAccessFromFileURLs = true
                         settings.allowUniversalAccessFromFileURLs = true
                         settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        webChromeClient = WebChromeClient()
+                        webChromeClient = object : WebChromeClient() {
+                            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                try {
+                                    val msg = consoleMessage?.message() ?: ""
+                                    val src = consoleMessage?.sourceId() ?: ""
+                                    val line = consoleMessage?.lineNumber() ?: -1
+                                    Log.d("WebViewConsole", "$msg ($src:$line)")
+                                } catch (e: Exception) {
+                                    Log.d("WebViewConsole", "console message error: ${e.message}")
+                                }
+                                return true
+                            }
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 val pointsJson = JSONArray().apply {
@@ -753,6 +767,13 @@ private fun RouteMapPreview(
                                         })
                                     }
                                 }.toString()
+
+                                // Log the injected MapTiler key into WebView console for debugging
+                                try {
+                                    view?.evaluateJavascript("console.log('MAPTILER_KEY:', ${org.json.JSONObject.quote(mapTilerKey)});", null)
+                                } catch (_: Exception) {
+                                }
+
                                 view?.evaluateJavascript(
                                     "window.renderRoute(${org.json.JSONObject.quote(pointsJson)}, ${org.json.JSONObject.quote(mapTilerKey)}, ${previewDurationSec});",
                                     null,
