@@ -36,7 +36,18 @@
 
     const CAMERA_CONFIG = {
       pitch: 74,
-      zoom: 14.2
+      zoom: 14.2,
+      sideOffsetM: 420,
+      backOffsetM: 360,
+      centerSmoothing: 0.032,
+      bearingSmoothing: 0.038,
+      lookAheadPoints: 56,
+      focusAheadPoints: 18,
+      bearingWindow: 30,
+      maxBearingSpeedDegPerSec: 16,
+      outroPitch: 16,
+      outroBearing: 0,
+      outroPadding: 68,
     };
 
     function ensureMap(key) {
@@ -128,10 +139,18 @@
       const segmentCount = coords.length - 1;
       const startedAt = performance.now();
 
-      // look-ahead in number of points ahead on the polyline
-      const LOOK_AHEAD_POINTS = Math.max(3, Math.floor(coords.length / 30));
+      // camera smoothing state
+      let camLon = coords[0][0];
+      let camLat = coords[0][1];
+      let camBearing = 0;
+      let lastNow = performance.now();
+
+      const LOOK_AHEAD_POINTS = CAMERA_CONFIG.lookAheadPoints || Math.max(3, Math.floor(coords.length / 30));
 
       const tick = (now) => {
+        const dt = Math.min(200, now - lastNow) / 1000;
+        lastNow = now;
+
         const elapsed = (now - startedAt) % totalMs;
         const progress = elapsed / totalMs;
         const floatingIndex = progress * segmentCount;
@@ -143,32 +162,37 @@
         const lon = p0[0] + (p1[0] - p0[0]) * localT;
         const lat = p0[1] + (p1[1] - p0[1]) * localT;
 
-        // compute bearing in degrees
+        // compute instantaneous bearing using a small window ahead
         const br = bearingBetween(p0, p1);
 
-        // update feature with bearing property
-        const feature = {
-          type: 'Feature',
-          properties: { bearing: br },
-          geometry: { type: 'Point', coordinates: [lon, lat] }
-        };
-
+        // update route head
+        const feature = { type: 'Feature', properties: { bearing: br }, geometry: { type: 'Point', coordinates: [lon, lat] } };
         const source = map.getSource('routeHead');
         if (source) source.setData(feature);
 
-        // compute look-ahead target by choosing a point further ahead on the polyline
+        // look-ahead center
         const aheadIndex = Math.min(segmentCount, idx + LOOK_AHEAD_POINTS);
         const aheadPoint = coords[aheadIndex];
-        // interpolate a bit towards the aheadPoint for smoother look-ahead
         const targetLon = lon + (aheadPoint[0] - lon) * 0.6;
         const targetLat = lat + (aheadPoint[1] - lat) * 0.6;
 
-        // smoothly move camera toward target center and rotate to bearing
+        // smooth camera position
+        const cs = CAMERA_CONFIG.centerSmoothing || 0.032;
+        camLon = camLon + (targetLon - camLon) * cs;
+        camLat = camLat + (targetLat - camLat) * cs;
+
+        // smooth bearing with rate limit
+        const bs = CAMERA_CONFIG.bearingSmoothing || 0.038;
+        // shortest angle delta
+        const delta = ((br - camBearing + 540) % 360) - 180;
+        const maxStep = (CAMERA_CONFIG.maxBearingSpeedDegPerSec || 16) * dt;
+        const step = Math.max(-maxStep, Math.min(maxStep, delta * bs * 10));
+        camBearing = (camBearing + step + 360) % 360;
+
         try {
-          map.easeTo({ center: [targetLon, targetLat], bearing: br, pitch: CAMERA_CONFIG.pitch, duration: 300 });
+          map.easeTo({ center: [camLon, camLat], bearing: camBearing, pitch: CAMERA_CONFIG.pitch, duration: 300 });
         } catch (e) {
-          // ignore easing errors on some platforms
-          map.setCenter([targetLon, targetLat]);
+          map.setCenter([camLon, camLat]);
           map.setPitch(CAMERA_CONFIG.pitch);
         }
 
