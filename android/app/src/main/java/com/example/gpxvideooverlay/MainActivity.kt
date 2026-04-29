@@ -12,6 +12,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
+import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -730,8 +730,9 @@ private fun RouteMapPreview(
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 560.dp),
+                    .height(720.dp),
                 factory = { context ->
+                    WebView.setWebContentsDebuggingEnabled(true)
                     WebView(context).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
@@ -758,6 +759,7 @@ private fun RouteMapPreview(
                                 )
                             }
                         }
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
                         loadUrl("file:///android_asset/route_preview.html")
                     }
                 },

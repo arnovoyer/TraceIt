@@ -67,6 +67,7 @@
       map.on('load', () => {
         ready = true;
         statusEl.textContent = 'Route wird angezeigt...';
+        map.resize();
       });
 
       map.on('error', (event) => {
@@ -308,9 +309,10 @@
         if (coords.length > 1) {
           const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
           map.fitBounds(bounds, { padding: 80, maxZoom: 15, duration: 0 });
+          map.resize();
           map.easeTo({ pitch: CAMERA_CONFIG.pitch, duration: 0 });
           animateRouteHead(coords, durationSec);
-          statusEl.textContent = 'Route wird angezeigt...';
+          statusEl.style.display = 'none';
         }
       };
 
