@@ -50,11 +50,32 @@
       outroPadding: 68,
     };
 
+    function createSatelliteStyle() {
+      return {
+        version: 8,
+        sources: {
+          imagery: {
+            type: 'raster',
+            tiles: [
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            tileSize: 256,
+            attribution: 'Tiles © Esri'
+          }
+        },
+        layers: [
+          {
+            id: 'imagery',
+            type: 'raster',
+            source: 'imagery'
+          }
+        ]
+      };
+    }
+
     function ensureMap(key) {
       if (map) return;
-      const style = key
-        ? `https://api.maptiler.com/maps/satellite/style.json?key=${key}`
-        : 'https://demotiles.maplibre.org/style.json';
+      const style = createSatelliteStyle();
 
       map = new maplibregl.Map({
         container: 'map',
@@ -72,6 +93,7 @@
 
       map.on('error', (event) => {
         if (event && event.error) {
+          console.log('Map error:', event.error && event.error.message ? event.error.message : event.error);
           statusEl.textContent = 'Karte konnte nicht geladen werden.';
         }
       });
