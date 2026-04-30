@@ -780,7 +780,6 @@ private fun RouteMapPreview(
                                 )
                             }
                         }
-                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
                         loadUrl("file:///android_asset/route_preview.html")
                     }
                 },

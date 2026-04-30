@@ -91,6 +91,12 @@
         map.resize();
       });
 
+      map.on('idle', () => {
+        if (statusEl.style.display !== 'none' && ready) {
+          statusEl.style.display = 'none';
+        }
+      });
+
       map.on('error', (event) => {
         if (event && event.error) {
           console.log('Map error:', event.error && event.error.message ? event.error.message : event.error);
@@ -334,7 +340,7 @@
           map.resize();
           map.easeTo({ pitch: CAMERA_CONFIG.pitch, duration: 0 });
           animateRouteHead(coords, durationSec);
-          statusEl.style.display = 'none';
+          statusEl.textContent = 'Karte und Route werden gerendert...';
         }
       };
 
