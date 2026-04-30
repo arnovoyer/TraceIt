@@ -21,6 +21,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,6 +84,10 @@ import com.example.gpxvideooverlay.ui.theme.GpxVideoOverlayTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import org.json.JSONArray
 import kotlin.math.max
 
@@ -140,6 +145,16 @@ private fun OverlayApp() {
     val selectedActivity = activities.firstOrNull { it.id == selectedActivityId }
     val selectedMedia = selectedActivity?.let { repository.mediaForActivity(it.id) }.orEmpty()
     val selectedRoutePoints = selectedActivity?.let { repository.routePointsForActivity(it.id) }.orEmpty()
+
+    BackHandler(enabled = currentScreen != OverlayScreen.Import) {
+        currentScreen = when (currentScreen) {
+            OverlayScreen.Preview -> OverlayScreen.Media
+            OverlayScreen.Settings -> OverlayScreen.Preview
+            OverlayScreen.Export -> OverlayScreen.Settings
+            OverlayScreen.Media -> OverlayScreen.Import
+            OverlayScreen.Import -> OverlayScreen.Import
+        }
+    }
 
     fun runGalleryAutoAssign(activityId: String) {
         val permission = galleryPermissionForDevice()
@@ -721,6 +736,17 @@ private fun RouteMapPreview(
     mapTilerKey: String,
     previewDurationSec: Float,
 ) {
+    val webViewRef = remember { mutableStateOf<WebView?>(null) }
+
+    DisposableEffect(routePoints.size, mapTilerKey, previewDurationSec) {
+        onDispose {
+            webViewRef.value?.stopLoading()
+            webViewRef.value?.loadUrl("about:blank")
+            webViewRef.value?.destroy()
+            webViewRef.value = null
+        }
+    }
+
     ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF152235))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("3. Route-Preview", color = Color.White, style = MaterialTheme.typography.headlineSmall)
@@ -729,61 +755,63 @@ private fun RouteMapPreview(
                 return@Column
             }
 
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(720.dp),
-                factory = { context ->
-                    WebView.setWebContentsDebuggingEnabled(true)
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.databaseEnabled = true
-                        settings.allowContentAccess = true
-                        settings.allowFileAccess = true
-                        settings.allowFileAccessFromFileURLs = true
-                        settings.allowUniversalAccessFromFileURLs = true
-                        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                                try {
-                                    val msg = consoleMessage?.message() ?: ""
-                                    val src = consoleMessage?.sourceId() ?: ""
-                                    val line = consoleMessage?.lineNumber() ?: -1
-                                    Log.d("WebViewConsole", "$msg ($src:$line)")
-                                } catch (e: Exception) {
-                                    Log.d("WebViewConsole", "console message error: ${e.message}")
-                                }
-                                return true
-                            }
-                        }
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                val pointsJson = JSONArray().apply {
-                                    routePoints.forEach { p ->
-                                        put(org.json.JSONObject().apply {
-                                            put("lat", p.lat)
-                                            put("lon", p.lon)
-                                        })
+            key("route-map-preview") {
+                AndroidView(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(720.dp),
+                    factory = { context ->
+                        WebView.setWebContentsDebuggingEnabled(true)
+                        WebView(context).apply {
+                            webViewRef.value = this
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.databaseEnabled = true
+                            settings.allowContentAccess = true
+                            settings.allowFileAccess = true
+                            settings.allowFileAccessFromFileURLs = true
+                            settings.allowUniversalAccessFromFileURLs = true
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                                    try {
+                                        val msg = consoleMessage?.message() ?: ""
+                                        val src = consoleMessage?.sourceId() ?: ""
+                                        val line = consoleMessage?.lineNumber() ?: -1
+                                        Log.d("WebViewConsole", "$msg ($src:$line)")
+                                    } catch (e: Exception) {
+                                        Log.d("WebViewConsole", "console message error: ${e.message}")
                                     }
-                                }.toString()
-
-                                // Log the injected MapTiler key into WebView console for debugging
-                                try {
-                                    view?.evaluateJavascript("console.log('MAPTILER_KEY:', ${org.json.JSONObject.quote(mapTilerKey)});", null)
-                                } catch (_: Exception) {
+                                    return true
                                 }
-
-                                view?.evaluateJavascript(
-                                    "window.renderRoute(${org.json.JSONObject.quote(pointsJson)}, ${org.json.JSONObject.quote(mapTilerKey)}, ${previewDurationSec});",
-                                    null,
-                                )
                             }
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    val pointsJson = JSONArray().apply {
+                                        routePoints.forEach { p ->
+                                            put(org.json.JSONObject().apply {
+                                                put("lat", p.lat)
+                                                put("lon", p.lon)
+                                            })
+                                        }
+                                    }.toString()
+
+                                    try {
+                                        view?.evaluateJavascript("console.log('MAPTILER_KEY:', ${org.json.JSONObject.quote(mapTilerKey)});", null)
+                                    } catch (_: Exception) {
+                                    }
+
+                                    view?.evaluateJavascript(
+                                        "window.renderRoute(${org.json.JSONObject.quote(pointsJson)}, ${org.json.JSONObject.quote(mapTilerKey)}, ${previewDurationSec});",
+                                        null,
+                                    )
+                                }
+                            }
+                            loadUrl("file:///android_asset/route_preview.html")
                         }
-                        loadUrl("file:///android_asset/route_preview.html")
-                    }
-                },
-            )
+                    },
+                )
+            }
         }
     }
 }
