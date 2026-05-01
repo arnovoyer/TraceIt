@@ -28,7 +28,20 @@
 <body>
   <div id="map"></div>
   <div id="status">Route wird geladen...</div>
+  <div id="debug" style="position: absolute; right: 8px; top: 8px; z-index: 3; max-width: 40%; max-height: 40%; overflow:auto; background: rgba(0,0,0,0.6); color: #fff; font-size:12px; padding:8px; border-radius:6px; font-family:monospace;"></div>
   <script>
+    const debugEl = document.getElementById('debug');
+    function debugLog(...args) {
+      try {
+        console.log(...args);
+        const line = document.createElement('div');
+        line.textContent = args.map(a=> (typeof a==='object'? JSON.stringify(a): String(a))).join(' ');
+        debugEl.appendChild(line);
+        while (debugEl.childNodes.length > 200) debugEl.removeChild(debugEl.firstChild);
+      } catch (e) {}
+    }
+    window.addEventListener('error', (ev) => debugLog('window.onerror', ev.message || ev.error || ev));
+    window.addEventListener('unhandledrejection', (ev) => debugLog('unhandledrejection', ev.reason));
     let map;
     let ready = false;
     let animationFrameId = null;
@@ -77,6 +90,18 @@
       if (map) return;
       const style = createSatelliteStyle();
 
+      try {
+        const sup = (maplibregl && typeof maplibregl.supported === 'function') ? maplibregl.supported() : true;
+        debugLog('maplibre.supported:', sup);
+        if (!sup) {
+          statusEl.textContent = 'WebGL wird von dieser WebView nicht unterstuetzt.';
+          debugLog('WebGL unsupported - aborting map creation');
+          return;
+        }
+      } catch (e) {
+        debugLog('supported-check failed', e);
+      }
+
       map = new maplibregl.Map({
         container: 'map',
         style,
@@ -89,11 +114,15 @@
         ready = true;
         statusEl.textContent = 'Route wird angezeigt...';
         map.resize();
+        debugLog('map.load');
       });
 
+      map.on('render', () => debugLog('map.render'));
+      map.on('sourcedata', (e) => debugLog('sourcedata', e.sourceId, 'isSourceLoaded=', e.isSourceLoaded))
+      map.on('idle', () => debugLog('map.idle'));
       map.on('error', (event) => {
         if (event && event.error) {
-          console.log('Map error:', event.error && event.error.message ? event.error.message : event.error);
+          debugLog('Map error:', event.error && event.error.message ? event.error.message : event.error);
           statusEl.textContent = 'Karte konnte nicht geladen werden.';
         }
       });
