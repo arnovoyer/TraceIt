@@ -384,7 +384,24 @@ input[type="number"]::selection {
 
 #altitudeSvg {
   width: 100%;
-  height: 72px;
+  height: 88px;
+}
+
+.altitude-km-label,
+.altitude-ele-label {
+  fill: rgba(255, 236, 179, 0.88);
+  font-size: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  pointer-events: none;
+}
+
+.altitude-km-tick,
+.altitude-ele-tick {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1;
+  pointer-events: none;
 }
 
 #altitudeAreaBg {

@@ -19,6 +19,7 @@ const altitudeAreaDone = document.getElementById("altitudeAreaDone");
 const altitudeLineBg = document.getElementById("altitudeLineBg");
 const altitudeLineDone = document.getElementById("altitudeLineDone");
 const altitudeClipRect = document.getElementById("altitudeClipRect");
+const altitudeMarkers = document.getElementById("altitudeMarkers");
 const insightPanel = document.getElementById("insightPanel");
 const maxSpeedValue = document.getElementById("maxSpeedValue");
 const maxElevationValue = document.getElementById("maxElevationValue");
@@ -49,12 +50,24 @@ const HIGHLIGHT_SLOWDOWN_STRENGTH = 0.56;
 const PHOTO_SLOWDOWN_RADIUS = 42;
 const PHOTO_SLOWDOWN_STRENGTH = 0.46;
 const PROXIMITY_VISIBLE_RADIUS = 9;
+const SHOW_HIGHEST_INSIGHT = false;
+
+const ALTITUDE_SVG = {
+  width: 320,
+  height: 118,
+  leftPad: 28,
+  rightPad: 4,
+  topPad: 8,
+  bottomPad: 24,
+  minKmLabelGap: 34,
+  minEleLabelGap: 15,
+};
 
 const CAMERA_CONFIG = {
-  pitch: 74,
-  zoom: 14.2,
-  sideOffsetM: 420,
-  backOffsetM: 360,
+  pitch: 78,
+  zoom: 16.2,
+  sideOffsetM: 85,
+  backOffsetM: 85,
   centerSmoothing: 0.032,
   bearingSmoothing: 0.038,
   lookAheadPoints: 56,
@@ -68,22 +81,27 @@ const CAMERA_CONFIG = {
 
 const FORMAT_CAMERA_OVERRIDES = {
   landscape: {
-    sideOffsetM: 420,
-    backOffsetM: 360,
-    zoom: 14.2,
-    pitch: 74,
+    sideOffsetM: 85,
+    backOffsetM: 85,
+    zoom: 16.2,
+    pitch: 78,
     outroPitch: 16,
     outroPadding: 68,
   },
   portrait: {
-    sideOffsetM: 300,
-    backOffsetM: 240,
-    zoom: 13.6,
-    pitch: 72,
-    lookAheadPoints: 62,
-    focusAheadPoints: 22,
+    sideOffsetM: 0,
+    backOffsetM: 55,
+    zoom: 15.6,
+    pitch: 74,
+    lookAheadPoints: 48,
+    focusAheadPoints: 16,
     bearingWindow: 34,
     maxBearingSpeedDegPerSec: 13,
+    headAnchorX: 0.5,
+    headAnchorY: 0.66,
+    viewportMarginX: 0.12,
+    viewportMarginTop: 0.14,
+    viewportMarginBottom: 0.1,
     outroPitch: 6,
     outroPadding: {
       top: 145,
@@ -263,6 +281,48 @@ function makeMarkerSvg(kind) {
     `;
   }
 
+  if (kind === "start") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+        <circle cx="32" cy="30" r="22" fill="#16a34a" stroke="#14532d" stroke-width="2"/>
+        <path d="M32 58 L23 41 H41 Z" fill="#16a34a"/>
+        <rect x="22" y="18" width="20" height="14" rx="1.5" fill="#ffffff"/>
+        <rect x="22" y="18" width="10" height="7" fill="#16a34a"/>
+        <rect x="22" y="25" width="10" height="7" fill="#ffffff"/>
+        <rect x="32" y="18" width="10" height="7" fill="#ffffff"/>
+        <rect x="32" y="25" width="10" height="7" fill="#16a34a"/>
+        <line x1="22" y1="25" x2="42" y2="25" stroke="#14532d" stroke-width="0.8"/>
+        <line x1="32" y1="18" x2="32" y2="32" stroke="#14532d" stroke-width="1.2"/>
+      </svg>
+    `;
+  }
+
+  if (kind === "target") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+        <circle cx="32" cy="30" r="22" fill="#dc2626" stroke="#991b1b" stroke-width="2"/>
+        <path d="M32 58 L23 41 H41 Z" fill="#dc2626"/>
+        <rect x="21" y="17" width="22" height="16" rx="1.5" fill="#ffffff"/>
+        <rect x="21" y="17" width="5.5" height="4" fill="#111827"/>
+        <rect x="26.5" y="17" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="32" y="17" width="5.5" height="4" fill="#111827"/>
+        <rect x="37.5" y="17" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="21" y="21" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="26.5" y="21" width="5.5" height="4" fill="#111827"/>
+        <rect x="32" y="21" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="37.5" y="21" width="5.5" height="4" fill="#111827"/>
+        <rect x="21" y="25" width="5.5" height="4" fill="#111827"/>
+        <rect x="26.5" y="25" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="32" y="25" width="5.5" height="4" fill="#111827"/>
+        <rect x="37.5" y="25" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="21" y="29" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="26.5" y="29" width="5.5" height="4" fill="#111827"/>
+        <rect x="32" y="29" width="5.5" height="4" fill="#ffffff"/>
+        <rect x="37.5" y="29" width="5.5" height="4" fill="#111827"/>
+      </svg>
+    `;
+  }
+
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
       <circle cx="32" cy="30" r="20" fill="#facc15"/>
@@ -278,6 +338,8 @@ async function ensureMarkerImages() {
     ["highlight-speed", makeMarkerSvg("speed")],
     ["highlight-elevation", makeMarkerSvg("elevation")],
     ["photo-spot", makeMarkerSvg("photo")],
+    ["marker-start", makeMarkerSvg("start")],
+    ["marker-target", makeMarkerSvg("target")],
   ];
 
   for (const [name, svg] of specs) {
@@ -296,6 +358,65 @@ async function ensureMarkerImages() {
 }
 
 function ensureMarkerLayers() {
+  if (!map.getSource("route")) {
+    map.addSource("route", {
+      type: "geojson",
+      lineMetrics: true,
+      data: createLineFeature([]),
+    });
+  }
+
+  if (!map.getLayer("route-line-glow")) {
+    map.addLayer({
+      id: "route-line-glow",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFD700",
+        "line-opacity": 0.4,
+        "line-blur": 2,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 4,
+          14, 8,
+          16, 14,
+          18, 20,
+        ],
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line")) {
+    map.addLayer({
+      id: "route-line",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFFFFF",
+        "line-opacity": 0.98,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 1.5,
+          14, 2.5,
+          16, 4,
+          18, 5.5,
+        ],
+      },
+    });
+  }
+
   if (!map.getSource("highlightPoints")) {
     map.addSource("highlightPoints", {
       type: "geojson",
@@ -350,6 +471,30 @@ function ensureMarkerLayers() {
     });
   }
 
+  if (!map.getSource("routeEndpoints")) {
+    map.addSource("routeEndpoints", {
+      type: "geojson",
+      data: createFeatureCollection([]),
+    });
+  }
+
+  if (!map.getLayer("routeEndpointsLayer")) {
+    map.addLayer({
+      id: "routeEndpointsLayer",
+      type: "symbol",
+      source: "routeEndpoints",
+      layout: {
+        "icon-image": ["match", ["get", "kind"], "start", "marker-start", "marker-target"],
+        "icon-size": 0.82,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "bottom",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "viewport",
+      },
+    });
+  }
+
   routeIconLayerReady = true;
 }
 
@@ -366,7 +511,7 @@ function syncMarkerLayers() {
       properties: { kind: "speed", unlocked: Boolean(routeInsights.unlockedFastest) },
     });
   }
-  if (routeInsights?.highest) {
+  if (SHOW_HIGHEST_INSIGHT && routeInsights?.highest) {
     highlightFeatures.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [routeInsights.highest.lon, routeInsights.highest.lat] },
@@ -380,13 +525,35 @@ function syncMarkerLayers() {
     properties: { id: spot.id, unlocked: Boolean(spot.unlocked), name: spot.name },
   }));
 
+  const endpointFeatures = [];
+  if (routePoints.length >= 1) {
+    const start = routePoints[0];
+    endpointFeatures.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [start.lon, start.lat] },
+      properties: { kind: "start" },
+    });
+  }
+  if (routePoints.length >= 2) {
+    const finish = routePoints[routePoints.length - 1];
+    endpointFeatures.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [finish.lon, finish.lat] },
+      properties: { kind: "target" },
+    });
+  }
+
   const highlightSource = map.getSource("highlightPoints");
   const photoSource = map.getSource("photoPoints");
+  const endpointSource = map.getSource("routeEndpoints");
   if (highlightSource) {
     highlightSource.setData(createFeatureCollection(highlightFeatures));
   }
   if (photoSource) {
     photoSource.setData(createFeatureCollection(photoFeatures));
+  }
+  if (endpointSource) {
+    endpointSource.setData(createFeatureCollection(endpointFeatures));
   }
 }
 
@@ -608,17 +775,22 @@ function updateInsightsPanel() {
   }
 
   maxSpeedValue.textContent = routeInsights.fastest ? "In Naehe sichtbar" : "Keine Zeitdaten";
-  maxElevationValue.textContent = routeInsights.highest ? "Noch gesperrt" : "-";
-  photoSpotCount.textContent = String(photoSpots.length);
+  if (SHOW_HIGHEST_INSIGHT) {
+    maxElevationValue.textContent = routeInsights.highest ? "Noch gesperrt" : "-";
+  }
 
   maxSpeedRow?.classList.add("hidden-row", "muted");
   maxSpeedRow?.classList.remove("unlocked");
-  maxElevationRow?.classList.add("hidden-row", "muted");
-  maxElevationRow?.classList.remove("unlocked");
+  if (SHOW_HIGHEST_INSIGHT) {
+    maxElevationRow?.classList.add("hidden-row", "muted");
+    maxElevationRow?.classList.remove("unlocked");
+  } else {
+    maxElevationRow?.classList.add("hidden-row");
+  }
+  photoSpotCount.textContent = String(photoSpots.length);
+
   photoRow?.classList.add("hidden-row", "muted");
   photoRow?.classList.remove("unlocked");
-
-  hideInsightEvent();
   insightPanel.classList.add("hidden");
 }
 
@@ -642,7 +814,7 @@ function updateStatsVisibilityByProximity(segmentIndex) {
   }
 
   const nearFast = isNearIndex(segmentIndex, routeInsights.fastestRouteIndex);
-  const nearHighest = isNearIndex(segmentIndex, routeInsights.highestRouteIndex);
+  const nearHighest = SHOW_HIGHEST_INSIGHT && isNearIndex(segmentIndex, routeInsights.highestRouteIndex);
   const nearPhoto = photoSpots.some((spot) => isNearIndex(segmentIndex, spot.routeIndex));
 
   if (nearFast && routeInsights.fastest) {
@@ -689,6 +861,10 @@ function triggerUnlockPulse(element) {
 
 function unlockInsight(kind) {
   if (!routeInsights) {
+    return;
+  }
+
+  if (kind === "highest" && !SHOW_HIGHEST_INSIGHT) {
     return;
   }
 
@@ -890,7 +1066,7 @@ function computeHighlightSlowdown(segmentIndex) {
   if (Number.isInteger(routeInsights.fastestRouteIndex) && routeInsights.fastestRouteIndex >= 0) {
     indices.push(routeInsights.fastestRouteIndex);
   }
-  if (Number.isInteger(routeInsights.highestRouteIndex) && routeInsights.highestRouteIndex >= 0) {
+  if (Number.isInteger(routeInsights.highestRouteIndex) && routeInsights.highestRouteIndex >= 0 && SHOW_HIGHEST_INSIGHT) {
     indices.push(routeInsights.highestRouteIndex);
   }
 
@@ -940,6 +1116,65 @@ function isNearIndex(segmentIndex, targetIndex, radius = PROXIMITY_VISIBLE_RADIU
   return Number.isInteger(targetIndex) && targetIndex >= 0 && Math.abs(segmentIndex - targetIndex) <= radius;
 }
 
+function pickKmInterval(totalDistanceM) {
+  const totalKm = totalDistanceM / 1000;
+  if (totalKm <= 1.2) {
+    return 0.25;
+  }
+  if (totalKm <= 2.5) {
+    return 0.5;
+  }
+  if (totalKm <= 6) {
+    return 1;
+  }
+  if (totalKm <= 15) {
+    return 2;
+  }
+  return 5;
+}
+
+function pickElevationInterval(rangeM) {
+  if (rangeM <= 20) {
+    return 5;
+  }
+  if (rangeM <= 50) {
+    return 10;
+  }
+  if (rangeM <= 120) {
+    return 20;
+  }
+  if (rangeM <= 300) {
+    return 50;
+  }
+  return 100;
+}
+
+function filterNonOverlappingLabels(labels, minGap, axis = "x") {
+  if (!labels.length) {
+    return [];
+  }
+
+  const sorted = [...labels].sort((a, b) => a[axis] - b[axis]);
+  const kept = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = kept[kept.length - 1];
+    const current = sorted[i];
+    if (Math.abs(current[axis] - prev[axis]) >= minGap) {
+      kept.push(current);
+    }
+  }
+
+  return kept;
+}
+
+function formatKmLabel(km) {
+  if (Math.abs(km - Math.round(km)) < 0.05) {
+    return `${Math.round(km)} km`;
+  }
+  return `${km.toFixed(1)} km`;
+}
+
 function buildAltitudePathData(points) {
   if (!points || points.length < 2) {
     return null;
@@ -976,15 +1211,13 @@ function buildAltitudePathData(points) {
     return null;
   }
 
-  const width = 320;
-  const height = 96;
-  const topPad = 8;
-  const bottomPad = 10;
+  const { width, height, leftPad, rightPad, topPad, bottomPad } = ALTITUDE_SVG;
+  const plotWidth = width - leftPad - rightPad;
   const plotHeight = height - topPad - bottomPad;
   const elevationRange = Math.max(1, maxEle - minEle);
 
   const coords = sampled.map((p, idx) => {
-    const x = (distances[idx] / totalDistance) * width;
+    const x = leftPad + (distances[idx] / totalDistance) * plotWidth;
     const eleNorm = (p.ele - minEle) / elevationRange;
     const y = topPad + (1 - eleNorm) * plotHeight;
     return { x, y };
@@ -993,7 +1226,35 @@ function buildAltitudePathData(points) {
   const linePath = coords
     .map((c, idx) => `${idx === 0 ? "M" : "L"}${c.x.toFixed(2)} ${c.y.toFixed(2)}`)
     .join(" ");
-  const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
+  const areaPath = `${linePath} L ${leftPad + plotWidth} ${height - bottomPad + 4} L ${leftPad} ${height - bottomPad + 4} Z`;
+
+  const kmInterval = pickKmInterval(totalDistance);
+  const kmCandidates = [];
+  for (let km = 0; km <= totalDistance / 1000 + 0.001; km += kmInterval) {
+    const x = leftPad + (Math.min(km * 1000, totalDistance) / totalDistance) * plotWidth;
+    kmCandidates.push({
+      x,
+      y: height - bottomPad + 14,
+      text: formatKmLabel(km),
+      kind: "km",
+    });
+  }
+  const kmLabels = filterNonOverlappingLabels(kmCandidates, ALTITUDE_SVG.minKmLabelGap, "x");
+
+  const eleInterval = pickElevationInterval(elevationRange);
+  const eleStart = Math.ceil(minEle / eleInterval) * eleInterval;
+  const eleCandidates = [];
+  for (let ele = eleStart; ele <= maxEle + 0.001; ele += eleInterval) {
+    const eleNorm = (ele - minEle) / elevationRange;
+    const y = topPad + (1 - eleNorm) * plotHeight;
+    eleCandidates.push({
+      x: leftPad - 6,
+      y: y + 3,
+      text: `${Math.round(ele)} m`,
+      kind: "ele",
+    });
+  }
+  const eleLabels = filterNonOverlappingLabels(eleCandidates, ALTITUDE_SVG.minEleLabelGap, "y");
 
   return {
     linePath,
@@ -1002,7 +1263,55 @@ function buildAltitudePathData(points) {
     height,
     minEle,
     maxEle,
+    totalDistance,
+    kmLabels,
+    eleLabels,
   };
+}
+
+function renderAltitudeMarkers(data) {
+  if (!altitudeMarkers) {
+    return;
+  }
+
+  altitudeMarkers.replaceChildren();
+
+  if (!data) {
+    return;
+  }
+
+  const allLabels = [...(data.kmLabels || []), ...(data.eleLabels || [])];
+  for (const label of allLabels) {
+    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    text.setAttribute("x", String(label.x));
+    text.setAttribute("y", String(label.y));
+    text.setAttribute("class", label.kind === "km" ? "altitude-km-label" : "altitude-ele-label");
+    text.textContent = label.text;
+    if (label.kind === "km") {
+      text.setAttribute("text-anchor", "middle");
+    } else {
+      text.setAttribute("text-anchor", "end");
+    }
+    altitudeMarkers.appendChild(text);
+
+    if (label.kind === "km") {
+      const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      tick.setAttribute("x1", String(label.x));
+      tick.setAttribute("x2", String(label.x));
+      tick.setAttribute("y1", String(ALTITUDE_SVG.topPad + (ALTITUDE_SVG.height - ALTITUDE_SVG.topPad - ALTITUDE_SVG.bottomPad)));
+      tick.setAttribute("y2", String(ALTITUDE_SVG.height - ALTITUDE_SVG.bottomPad + 2));
+      tick.setAttribute("class", "altitude-km-tick");
+      altitudeMarkers.appendChild(tick);
+    } else {
+      const tick = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      tick.setAttribute("x1", String(ALTITUDE_SVG.leftPad - 2));
+      tick.setAttribute("x2", String(ALTITUDE_SVG.leftPad + 4));
+      tick.setAttribute("y1", String(label.y - 3));
+      tick.setAttribute("y2", String(label.y - 3));
+      tick.setAttribute("class", "altitude-ele-tick");
+      altitudeMarkers.appendChild(tick);
+    }
+  }
 }
 
 function updateAltitudeOverlayProgress(progress) {
@@ -1028,6 +1337,7 @@ function renderAltitudeOverlay(points) {
   altitudeLineBg.setAttribute("d", data.linePath);
   altitudeLineDone.setAttribute("d", data.linePath);
   altitudeClipRect.setAttribute("height", String(data.height));
+  renderAltitudeMarkers(data);
   updateAltitudeOverlayProgress(0);
   altitudeOverlay.classList.remove("hidden");
 }
@@ -1230,6 +1540,69 @@ function addHelicopterOffset(point, bearingDeg) {
   };
 }
 
+function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
+  const canvas = map.getCanvas();
+  if (!canvas?.width || !headPoint) {
+    return rawCenter;
+  }
+
+  const formatKey = getSelectedFormatKey();
+  const cfg = getActiveCameraConfig();
+  const isPortrait = formatKey === "portrait";
+
+  const marginX = cfg.viewportMarginX ?? (isPortrait ? 0.12 : 0.08);
+  const marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.14 : 0.1);
+  const marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.1 : 0.08);
+  const anchorX = cfg.headAnchorX ?? 0.5;
+  const anchorY = cfg.headAnchorY ?? (isPortrait ? 0.66 : 0.6);
+  const pullStrength = isPortrait ? 0.5 : 0.28;
+
+  map.jumpTo({
+    center: [rawCenter.lon, rawCenter.lat],
+    bearing,
+    pitch,
+    zoom,
+    duration: 0,
+  });
+
+  const headPx = map.project([headPoint.lon, headPoint.lat]);
+  const w = canvas.width;
+  const h = canvas.height;
+  const minX = w * marginX;
+  const maxX = w * (1 - marginX);
+  const minY = h * marginTop;
+  const maxY = h * (1 - marginBottom);
+  const targetX = w * anchorX;
+  const targetY = h * anchorY;
+
+  let dx = 0;
+  let dy = 0;
+
+  if (headPx.x < minX) {
+    dx = headPx.x - minX;
+  } else if (headPx.x > maxX) {
+    dx = headPx.x - maxX;
+  } else {
+    dx = (headPx.x - targetX) * pullStrength;
+  }
+
+  if (headPx.y < minY) {
+    dy = headPx.y - minY;
+  } else if (headPx.y > maxY) {
+    dy = headPx.y - maxY;
+  } else {
+    dy = (headPx.y - targetY) * pullStrength;
+  }
+
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+    return rawCenter;
+  }
+
+  const centerPx = map.project([rawCenter.lon, rawCenter.lat]);
+  const adjusted = map.unproject([centerPx.x + dx, centerPx.y + dy]);
+  return { lon: adjusted.lng, lat: adjusted.lat };
+}
+
 function clearExistingRoute() {
   clearInsightMarkers();
 
@@ -1239,42 +1612,27 @@ function clearExistingRoute() {
   if (map.getLayer("routeHead")) {
     map.removeLayer("routeHead");
   }
-  if (map.getLayer("routeLine")) {
-    map.removeLayer("routeLine");
-  }
   if (map.getSource("routeHead")) {
     map.removeSource("routeHead");
   }
   if (map.getSource("route")) {
-    map.removeSource("route");
+    map.getSource("route").setData(createLineFeature([]));
   }
 }
 
 function drawRouteLine() {
   clearExistingRoute();
+  ensureMarkerLayers();
 
   const initialCoords = routePoints.length > 0 ? [[routePoints[0].lon, routePoints[0].lat]] : [];
-
-  map.addSource("route", {
-    type: "geojson",
-    lineMetrics: true,
-    data: createLineFeature(initialCoords),
-  });
+  const routeSource = map.getSource("route");
+  if (routeSource) {
+    routeSource.setData(createLineFeature(initialCoords));
+  }
 
   map.addSource("routeHead", {
     type: "geojson",
     data: createPointFeature(routePoints[0].lon, routePoints[0].lat),
-  });
-
-  map.addLayer({
-    id: "routeLine",
-    type: "line",
-    source: "route",
-    paint: {
-      "line-color": "#FBBF24",
-      "line-width": 5.2,
-      "line-opacity": 0.95,
-    },
   });
 
   map.addLayer({
@@ -1371,7 +1729,14 @@ async function prewarmRouteTiles() {
     const bearing = getStableBearing(activePoints, lookAheadIndex);
     const focusIndex = Math.min(activePoints.length - 1, segmentIndex + cfg.focusAheadPoints);
     const focusPoint = activePoints[focusIndex];
-    const offsetCenter = addHelicopterOffset(focusPoint, bearing);
+    const routeHead = pointAtProgress(routePoints, progress);
+    const offsetCenter = keepRouteHeadInViewport(
+      addHelicopterOffset(focusPoint, bearing),
+      routeHead,
+      bearing,
+      cfg.pitch,
+      cfg.zoom
+    );
 
     map.jumpTo({
       center: [offsetCenter.lon, offsetCenter.lat],
@@ -1500,11 +1865,36 @@ function startAnimation() {
         updateStatsVisibilityByProximity(segmentIndex);
         setSpeedRowByProximity(isNearIndex(segmentIndex, routeInsights?.fastestRouteIndex));
 
-        const current = interpolatePoint(
+        // 3) Interpolate between route segments with slope-dependent braking
+        const currentRouteIdx = segmentIndex;
+        const nextRouteIdx = Math.min(segmentIndex + 1, routePoints.length - 1);
+        let cameraAlpha = localT;
+        let routeAlpha = localT;
+
+        const currentRoutePt = routePoints[currentRouteIdx];
+        const nextRoutePt = routePoints[nextRouteIdx];
+        const elevationGain =
+          Number.isFinite(currentRoutePt?.ele) && Number.isFinite(nextRoutePt?.ele)
+            ? nextRoutePt.ele - currentRoutePt.ele
+            : 0;
+
+        if (elevationGain > 0) {
+          const slopeFactor = Math.max(0.4, 1.0 - elevationGain * 0.3);
+          cameraAlpha = localT * slopeFactor;
+          routeAlpha = localT * slopeFactor;
+        }
+
+        const smoothCam = interpolatePoint(
           activePoints[segmentIndex],
           activePoints[segmentIndex + 1],
-          localT
+          cameraAlpha
         );
+        const smoothRoute = interpolatePoint(
+          routePoints[currentRouteIdx],
+          routePoints[nextRouteIdx],
+          routeAlpha
+        );
+
         const lookAheadIndex = Math.min(
           activePoints.length - 1,
           segmentIndex + cfg.lookAheadPoints
@@ -1529,8 +1919,14 @@ function startAnimation() {
           activePoints.length - 1,
           segmentIndex + cfg.focusAheadPoints
         );
-        const focusPoint = activePoints[focusIndex];
-        const offsetCenter = addHelicopterOffset(focusPoint, smoothedBearing);
+        const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
+        const offsetCenter = keepRouteHeadInViewport(
+          addHelicopterOffset(focusPoint, smoothedBearing),
+          smoothRoute,
+          smoothedBearing,
+          cfg.pitch,
+          cfg.zoom
+        );
         if (!smoothedCenter) {
           smoothedCenter = offsetCenter;
         } else {
@@ -1556,7 +1952,7 @@ function startAnimation() {
           }
         }
 
-        if (!reachedHighlight.highest && routeInsights?.highest && routeInsights.highestRouteIndex >= 0) {
+        if (SHOW_HIGHEST_INSIGHT && !reachedHighlight.highest && routeInsights?.highest && routeInsights.highestRouteIndex >= 0) {
           if (Math.abs(segmentIndex - routeInsights.highestRouteIndex) <= 5) {
             reachedHighlight.highest = true;
             unlockInsight("highest");
@@ -1580,12 +1976,12 @@ function startAnimation() {
         const shouldUpdateTrail =
           progress >= 1 || now - lastTrailUpdateAt >= TRAIL_UPDATE_INTERVAL_MS;
         if (shouldUpdateTrail && map.getSource("route")) {
-          const animatedCoords = trailCoords.concat([[current.lon, current.lat]]);
+          const animatedCoords = trailCoords.concat([[smoothRoute.lon, smoothRoute.lat]]);
           map.getSource("route").setData(createLineFeature(animatedCoords));
           lastTrailUpdateAt = now;
         }
 
-        updateRouteHead(current, smoothedBearing);
+        updateRouteHead(smoothRoute, smoothedBearing);
 
         map.jumpTo({
           center: [smoothedCenter.lon, smoothedCenter.lat],

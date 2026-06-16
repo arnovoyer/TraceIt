@@ -42,7 +42,7 @@
               <span class="insight-label">Max. Speed</span>
               <strong id="maxSpeedValue">-</strong>
             </div>
-            <div id="maxElevationRow" class="insight-row muted">
+            <div id="maxElevationRow" class="insight-row muted hidden-row">
               <span class="insight-icon" aria-hidden="true">⛰</span>
               <span class="insight-label">Hoechster Punkt</span>
               <strong id="maxElevationValue">-</strong>
@@ -56,10 +56,10 @@
           </aside>
 
           <div id="altitudeOverlay" class="altitude-overlay hidden" aria-label="Hoehenprofil">
-            <svg id="altitudeSvg" viewBox="0 0 320 96" preserveAspectRatio="none">
+            <svg id="altitudeSvg" viewBox="0 0 320 118" preserveAspectRatio="none">
               <defs>
                 <clipPath id="altitudeProgressClip">
-                  <rect id="altitudeClipRect" x="0" y="0" width="0" height="96"></rect>
+                  <rect id="altitudeClipRect" x="0" y="0" width="0" height="118"></rect>
                 </clipPath>
                 <linearGradient id="altitudeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
                   <stop offset="0%" style="stop-color:#FBBF24;stop-opacity:0.6" />
@@ -70,6 +70,7 @@
                   <stop offset="100%" style="stop-color:#FBBF24;stop-opacity:1" />
                 </linearGradient>
               </defs>
+              <g id="altitudeMarkers"></g>
               <path id="altitudeAreaBg" d=""></path>
               <path id="altitudeAreaDone" d="" clip-path="url(#altitudeProgressClip)"></path>
               <path id="altitudeLineBg" d=""></path>
