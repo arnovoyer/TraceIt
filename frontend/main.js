@@ -1515,7 +1515,12 @@ function getStableBearing(points, segmentIndex) {
   const from = points[fromIndex];
   const to = points[toIndex];
 
-  return computeBearing(from, to);
+  if (!from || !to || fromIndex === toIndex) {
+    return 0;
+  }
+
+  const bearing = computeBearing(from, to);
+  return Number.isFinite(bearing) ? bearing : 0;
 }
 
 function addHelicopterOffset(point, bearingDeg) {
@@ -1612,6 +1617,9 @@ function clearExistingRoute() {
   if (map.getLayer("routeHead")) {
     map.removeLayer("routeHead");
   }
+  if (map.getLayer("routeHeadRing")) {
+    map.removeLayer("routeHeadRing");
+  }
   if (map.getSource("routeHead")) {
     map.removeSource("routeHead");
   }
@@ -1635,27 +1643,43 @@ function drawRouteLine() {
     data: createPointFeature(routePoints[0].lon, routePoints[0].lat),
   });
 
+  // Dynamic glow that follows the route direction
   map.addLayer({
     id: "routeHeadGlow",
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 20,
+      "circle-radius": 18,
       "circle-color": "#FBBF24",
-      "circle-opacity": 0.35,
-      "circle-blur": 1.2,
+      "circle-opacity": 0.4,
+      "circle-blur": 1.5,
     },
   });
 
+  // Inner bright core
   map.addLayer({
     id: "routeHead",
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 6,
+      "circle-radius": 5,
       "circle-color": "#fff36d",
-      "circle-stroke-width": 2,
+      "circle-stroke-width": 2.5,
       "circle-stroke-color": "#fffef4",
+    },
+  });
+
+  // Directional indicator ring
+  map.addLayer({
+    id: "routeHeadRing",
+    type: "circle",
+    source: "routeHead",
+    paint: {
+      "circle-radius": 10,
+      "circle-color": "transparent",
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": "#FBBF24",
+      "circle-stroke-opacity": 0.6,
     },
   });
 }
@@ -1901,7 +1925,7 @@ function startAnimation() {
         );
         const rawBearing = getStableBearing(activePoints, lookAheadIndex);
 
-        if (smoothedBearing === null) {
+        if (smoothedBearing === null || !Number.isFinite(smoothedBearing)) {
           smoothedBearing = rawBearing;
         } else {
           const delta = shortestAngleDelta(smoothedBearing, rawBearing);
@@ -1909,10 +1933,13 @@ function startAnimation() {
           const maxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
           const limitedDelta = Math.max(-maxStep, Math.min(maxStep, smoothedDelta));
           smoothedBearing += limitedDelta;
+          
+          // Normalize to 0-360 range
+          smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
         }
 
         if (!Number.isFinite(smoothedBearing)) {
-          smoothedBearing = rawBearing;
+          smoothedBearing = rawBearing || 0;
         }
 
         const focusIndex = Math.min(
@@ -2224,6 +2251,98 @@ window.gpxOverlay = {
   },
   play: async () => {
     return startAnimation();
+  },
+  setProgress: (progress) => {
+    if (routePoints.length < 2) {
+      return false;
+    }
+
+    stopAnimation();
+
+    const durationSeconds = Number(durationInput.value || 40);
+    const durationMs = Math.max(5000, durationSeconds * 1000);
+    const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
+    const cfg = getActiveCameraConfig();
+    const segmentCount = activePoints.length - 1;
+
+    const clampedProgress = Math.min(1, Math.max(0, progress));
+    const scaled = clampedProgress * segmentCount;
+    const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
+    const localT = scaled - segmentIndex;
+
+    updateAltitudeOverlayProgress(clampedProgress);
+    updateStatsVisibilityByProximity(segmentIndex);
+
+    const currentRouteIdx = segmentIndex;
+    const nextRouteIdx = Math.min(segmentIndex + 1, routePoints.length - 1);
+    let cameraAlpha = localT;
+    let routeAlpha = localT;
+
+    const currentRoutePt = routePoints[currentRouteIdx];
+    const nextRoutePt = routePoints[nextRouteIdx];
+    const elevationGain =
+      Number.isFinite(currentRoutePt?.ele) && Number.isFinite(nextRoutePt?.ele)
+        ? nextRoutePt.ele - currentRoutePt.ele
+        : 0;
+
+    if (elevationGain > 0) {
+      const slopeFactor = Math.max(0.4, 1.0 - elevationGain * 0.3);
+      cameraAlpha = localT * slopeFactor;
+      routeAlpha = localT * slopeFactor;
+    }
+
+    const smoothCam = interpolatePoint(
+      activePoints[segmentIndex],
+      activePoints[segmentIndex + 1],
+      cameraAlpha
+    );
+    const smoothRoute = interpolatePoint(
+      routePoints[currentRouteIdx],
+      routePoints[nextRouteIdx],
+      routeAlpha
+    );
+
+    const lookAheadIndex = Math.min(
+      activePoints.length - 1,
+      segmentIndex + cfg.lookAheadPoints
+    );
+    const rawBearing = getStableBearing(activePoints, lookAheadIndex);
+
+    const focusIndex = Math.min(
+      activePoints.length - 1,
+      segmentIndex + cfg.focusAheadPoints
+    );
+    const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
+    const offsetCenter = keepRouteHeadInViewport(
+      addHelicopterOffset(focusPoint, rawBearing),
+      smoothRoute,
+      rawBearing,
+      cfg.pitch,
+      cfg.zoom
+    );
+
+    // Update trail
+    const trailCoords = [];
+    for (let i = 0; i <= segmentIndex; i += 1) {
+      trailCoords.push([routePoints[i].lon, routePoints[i].lat]);
+    }
+    trailCoords.push([smoothRoute.lon, smoothRoute.lat]);
+
+    if (map.getSource("route")) {
+      map.getSource("route").setData(createLineFeature(trailCoords));
+    }
+
+    updateRouteHead(smoothRoute, rawBearing);
+
+    map.jumpTo({
+      center: [offsetCenter.lon, offsetCenter.lat],
+      bearing: rawBearing,
+      pitch: cfg.pitch,
+      zoom: cfg.zoom,
+      duration: 0,
+    });
+
+    return true;
   },
 };
 

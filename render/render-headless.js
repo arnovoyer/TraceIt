@@ -141,21 +141,33 @@ async function main() {
   const totalSeconds = args.duration + Math.max(2, Math.round(args.duration * 0.18));
   const totalFrames = Math.ceil(totalSeconds * args.fps);
 
-  await page.evaluate(() => {
-    window.gpxOverlay.play();
-  });
-
-  const start = Date.now();
+  // Capture frames by controlling animation progress directly
+  // This eliminates PC performance dependency and ensures all frames are loaded
   for (let i = 0; i < totalFrames; i += 1) {
-    const targetTime = start + Math.floor((i * 1000) / args.fps);
-    const now = Date.now();
-    const waitMs = targetTime - now;
-    if (waitMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
+    const progress = i / totalFrames;
+    
+    // Set animation to specific progress without playing
+    await page.evaluate((prog) => {
+      if (!window.gpxOverlay || !window.gpxOverlay.setProgress) {
+        throw new Error("setProgress not available on gpxOverlay");
+      }
+      window.gpxOverlay.setProgress(prog);
+    }, progress);
+
+    // Wait for map to render completely
+    await page.waitForFunction(() => {
+      return window.map && window.map.isStyleLoaded() && !window.map.isMoving();
+    }, { timeout: 5000 });
+
+    // Additional delay to ensure tiles are fully loaded
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const framePath = path.join(workDir, `frame-${String(i).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });
+    
+    if (i % 50 === 0) {
+      console.log(`  Captured frame ${i + 1}/${totalFrames}`);
+    }
   }
 
   await browser.close();
