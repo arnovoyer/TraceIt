@@ -154,13 +154,36 @@ async function main() {
       window.gpxOverlay.setProgress(prog);
     }, progress);
 
-    // Wait for map to render completely
+    // Wait for map to be idle and style loaded
     await page.waitForFunction(() => {
       return window.map && window.map.isStyleLoaded() && !window.map.isMoving();
-    }, { timeout: 5000 });
+    }, { timeout: 10000 });
 
-    // Additional delay to ensure tiles are fully loaded
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Wait for all tiles to be loaded in the current viewport
+    await page.evaluate(() => {
+      return new Promise((resolve) => {
+        if (!window.map) {
+          resolve();
+          return;
+        }
+        
+        const checkTiles = () => {
+          const tilesLoading = window.map.areTilesLoaded ? window.map.areTilesLoaded() : false;
+          if (tilesLoading) {
+            resolve();
+          } else {
+            setTimeout(checkTiles, 50);
+          }
+        };
+        
+        // Give it some time to load tiles, but don't wait forever
+        setTimeout(() => resolve(), 300);
+        checkTiles();
+      });
+    });
+
+    // Additional delay to ensure rendering is complete
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
     const framePath = path.join(workDir, `frame-${String(i).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });

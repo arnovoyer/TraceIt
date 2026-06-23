@@ -284,15 +284,25 @@ function makeMarkerSvg(kind) {
   if (kind === "start") {
     return `
       <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
-        <circle cx="32" cy="30" r="22" fill="#16a34a" stroke="#14532d" stroke-width="2"/>
-        <path d="M32 58 L23 41 H41 Z" fill="#16a34a"/>
-        <rect x="22" y="18" width="20" height="14" rx="1.5" fill="#ffffff"/>
+        <defs>
+          <linearGradient id="startGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#22c55e"/>
+            <stop offset="100%" style="stop-color:#16a34a"/>
+          </linearGradient>
+          <filter id="startShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#14532d" flood-opacity="0.4"/>
+          </filter>
+        </defs>
+        <circle cx="32" cy="30" r="22" fill="url(#startGrad)" stroke="#14532d" stroke-width="2" filter="url(#startShadow)"/>
+        <path d="M32 58 L23 41 H41 Z" fill="url(#startGrad)" filter="url(#startShadow)"/>
+        <rect x="22" y="18" width="20" height="14" rx="1.5" fill="#ffffff" stroke="#14532d" stroke-width="0.5"/>
         <rect x="22" y="18" width="10" height="7" fill="#16a34a"/>
         <rect x="22" y="25" width="10" height="7" fill="#ffffff"/>
         <rect x="32" y="18" width="10" height="7" fill="#ffffff"/>
         <rect x="32" y="25" width="10" height="7" fill="#16a34a"/>
         <line x1="22" y1="25" x2="42" y2="25" stroke="#14532d" stroke-width="0.8"/>
         <line x1="32" y1="18" x2="32" y2="32" stroke="#14532d" stroke-width="1.2"/>
+        <circle cx="32" cy="30" r="3" fill="#ffffff" opacity="0.9"/>
       </svg>
     `;
   }
@@ -300,9 +310,18 @@ function makeMarkerSvg(kind) {
   if (kind === "target") {
     return `
       <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
-        <circle cx="32" cy="30" r="22" fill="#dc2626" stroke="#991b1b" stroke-width="2"/>
-        <path d="M32 58 L23 41 H41 Z" fill="#dc2626"/>
-        <rect x="21" y="17" width="22" height="16" rx="1.5" fill="#ffffff"/>
+        <defs>
+          <linearGradient id="targetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ef4444"/>
+            <stop offset="100%" style="stop-color:#dc2626"/>
+          </linearGradient>
+          <filter id="targetShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#991b1b" flood-opacity="0.4"/>
+          </filter>
+        </defs>
+        <circle cx="32" cy="30" r="22" fill="url(#targetGrad)" stroke="#991b1b" stroke-width="2" filter="url(#targetShadow)"/>
+        <path d="M32 58 L23 41 H41 Z" fill="url(#targetGrad)" filter="url(#targetShadow)"/>
+        <rect x="21" y="17" width="22" height="16" rx="1.5" fill="#ffffff" stroke="#991b1b" stroke-width="0.5"/>
         <rect x="21" y="17" width="5.5" height="4" fill="#111827"/>
         <rect x="26.5" y="17" width="5.5" height="4" fill="#ffffff"/>
         <rect x="32" y="17" width="5.5" height="4" fill="#111827"/>
@@ -319,6 +338,7 @@ function makeMarkerSvg(kind) {
         <rect x="26.5" y="29" width="5.5" height="4" fill="#111827"/>
         <rect x="32" y="29" width="5.5" height="4" fill="#ffffff"/>
         <rect x="37.5" y="29" width="5.5" height="4" fill="#111827"/>
+        <circle cx="32" cy="30" r="3" fill="#ffffff" opacity="0.9"/>
       </svg>
     `;
   }
@@ -1509,8 +1529,13 @@ function updateRouteHead(currentPoint, currentBearing) {
 
 function getStableBearing(points, segmentIndex) {
   const cfg = getActiveCameraConfig();
-  const fromIndex = Math.max(0, segmentIndex - cfg.bearingWindow);
-  const toIndex = Math.min(points.length - 1, segmentIndex + cfg.bearingWindow);
+  
+  // Dynamically reduce window size near the end of the route to prevent off-track issues
+  const distanceFromEnd = points.length - 1 - segmentIndex;
+  const dynamicWindow = Math.min(cfg.bearingWindow, Math.max(5, distanceFromEnd / 2));
+  
+  const fromIndex = Math.max(0, segmentIndex - Math.floor(dynamicWindow));
+  const toIndex = Math.min(points.length - 1, segmentIndex + Math.floor(dynamicWindow));
 
   const from = points[fromIndex];
   const to = points[toIndex];
@@ -1617,6 +1642,9 @@ function clearExistingRoute() {
   if (map.getLayer("routeHead")) {
     map.removeLayer("routeHead");
   }
+  if (map.getLayer("routeHeadCore")) {
+    map.removeLayer("routeHeadCore");
+  }
   if (map.getLayer("routeHeadRing")) {
     map.removeLayer("routeHeadRing");
   }
@@ -1643,43 +1671,41 @@ function drawRouteLine() {
     data: createPointFeature(routePoints[0].lon, routePoints[0].lat),
   });
 
-  // Dynamic glow that follows the route direction
-  map.addLayer({
-    id: "routeHeadGlow",
-    type: "circle",
-    source: "routeHead",
-    paint: {
-      "circle-radius": 18,
-      "circle-color": "#FBBF24",
-      "circle-opacity": 0.4,
-      "circle-blur": 1.5,
-    },
-  });
-
-  // Inner bright core
+  // Elongated head that follows the route line - wider than the route
   map.addLayer({
     id: "routeHead",
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 5,
+      "circle-radius": 8,
       "circle-color": "#fff36d",
-      "circle-stroke-width": 2.5,
-      "circle-stroke-color": "#fffef4",
+      "circle-stroke-width": 0,
+      "circle-opacity": 1,
     },
   });
 
-  // Directional indicator ring
+  // Outer glow that blends with the route
   map.addLayer({
-    id: "routeHeadRing",
+    id: "routeHeadGlow",
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 10,
-      "circle-color": "transparent",
-      "circle-stroke-width": 1.5,
-      "circle-stroke-color": "#FBBF24",
-      "circle-stroke-opacity": 0.6,
+      "circle-radius": 14,
+      "circle-color": "#FBBF24",
+      "circle-opacity": 0.5,
+      "circle-blur": 2,
+    },
+  });
+
+  // Inner core for brightness
+  map.addLayer({
+    id: "routeHeadCore",
+    type: "circle",
+    source: "routeHead",
+    paint: {
+      "circle-radius": 4,
+      "circle-color": "#ffffff",
+      "circle-opacity": 0.9,
     },
   });
 }
@@ -1919,9 +1945,14 @@ function startAnimation() {
           routeAlpha
         );
 
+        // Dynamically adjust lookahead based on position in route to prevent off-track issues
+        const distanceFromEnd = activePoints.length - 1 - segmentIndex;
+        const dynamicLookAhead = Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd));
+        const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
+        
         const lookAheadIndex = Math.min(
           activePoints.length - 1,
-          segmentIndex + cfg.lookAheadPoints
+          segmentIndex + dynamicLookAhead
         );
         const rawBearing = getStableBearing(activePoints, lookAheadIndex);
 
@@ -1944,7 +1975,7 @@ function startAnimation() {
 
         const focusIndex = Math.min(
           activePoints.length - 1,
-          segmentIndex + cfg.focusAheadPoints
+          segmentIndex + dynamicFocusAhead
         );
         const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
         const offsetCenter = keepRouteHeadInViewport(
@@ -2302,15 +2333,20 @@ window.gpxOverlay = {
       routeAlpha
     );
 
+    // Dynamically adjust lookahead based on position in route to prevent off-track issues
+    const distanceFromEnd = activePoints.length - 1 - segmentIndex;
+    const dynamicLookAhead = Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd));
+    const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
+    
     const lookAheadIndex = Math.min(
       activePoints.length - 1,
-      segmentIndex + cfg.lookAheadPoints
+      segmentIndex + dynamicLookAhead
     );
     const rawBearing = getStableBearing(activePoints, lookAheadIndex);
 
     const focusIndex = Math.min(
       activePoints.length - 1,
-      segmentIndex + cfg.focusAheadPoints
+      segmentIndex + dynamicFocusAhead
     );
     const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
     const offsetCenter = keepRouteHeadInViewport(
