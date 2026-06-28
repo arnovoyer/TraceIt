@@ -1671,41 +1671,42 @@ function drawRouteLine() {
     data: createPointFeature(routePoints[0].lon, routePoints[0].lat),
   });
 
-  // Elongated head that follows the route line - wider than the route
-  map.addLayer({
-    id: "routeHead",
-    type: "circle",
-    source: "routeHead",
-    paint: {
-      "circle-radius": 8,
-      "circle-color": "#fff36d",
-      "circle-stroke-width": 0,
-      "circle-opacity": 1,
-    },
-  });
-
-  // Outer glow that blends with the route
+  // Route head as a tapered line segment - integrated with the route
   map.addLayer({
     id: "routeHeadGlow",
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 14,
+      "circle-radius": 12,
       "circle-color": "#FBBF24",
-      "circle-opacity": 0.5,
-      "circle-blur": 2,
+      "circle-opacity": 0.6,
+      "circle-blur": 2.5,
     },
   });
 
-  // Inner core for brightness
+  // Main head - wider than route line but same color scheme
+  map.addLayer({
+    id: "routeHead",
+    type: "circle",
+    source: "routeHead",
+    paint: {
+      "circle-radius": 6,
+      "circle-color": "#FFFFFF",
+      "circle-stroke-width": 3,
+      "circle-stroke-color": "#FBBF24",
+      "circle-opacity": 1,
+    },
+  });
+
+  // Bright center for visibility
   map.addLayer({
     id: "routeHeadCore",
     type: "circle",
     source: "routeHead",
     paint: {
-      "circle-radius": 4,
-      "circle-color": "#ffffff",
-      "circle-opacity": 0.9,
+      "circle-radius": 3,
+      "circle-color": "#fff36d",
+      "circle-opacity": 1,
     },
   });
 }
@@ -2111,55 +2112,144 @@ async function recordAnimationAndDownload() {
     return;
   }
 
-  const canvas = map.getCanvas();
-  if (!canvas.captureStream) {
-    setStatus("Aufnahme im Browser nicht unterstuetzt (captureStream fehlt).");
-    return;
-  }
-
-  const stream = canvas.captureStream(60);
-  const mimeType = selectRecordingMimeType();
-  const targetBitrate = Math.max(12000000, Math.floor(canvas.width * canvas.height * 6));
-  const chunks = [];
-  const recorder = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: targetBitrate,
-  });
-
   isRecording = true;
   playButton.disabled = true;
   recordButton.disabled = true;
-  setStatus(
-    `Aufnahme laeuft ... ${getCurrentFormatLabel()} (${Math.round(targetBitrate / 1000000)} Mbps, ${canvas.width}x${canvas.height})`
-  );
 
-  recorder.ondataavailable = (event) => {
-    if (event.data && event.data.size > 0) {
-      chunks.push(event.data);
-    }
-  };
-
-  const stopPromise = new Promise((resolve) => {
-    recorder.onstop = () => resolve();
-  });
+  // Hide map and show progress bar
+  const mapStage = document.getElementById("mapStage");
+  const mapFrame = document.getElementById("mapFrame");
+  
+  if (mapStage && mapFrame) {
+    mapStage.style.display = "none";
+    
+    // Create progress bar container
+    const progressContainer = document.createElement("div");
+    progressContainer.id = "renderProgress";
+    progressContainer.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 500px;
+      gap: 20px;
+    `;
+    
+    const progressText = document.createElement("p");
+    progressText.textContent = "Video wird im Hintergrund gerendert...";
+    progressText.style.fontSize = "18px";
+    progressText.style.color = "#374151";
+    
+    const progressBar = document.createElement("div");
+    progressBar.style.cssText = `
+      width: 300px;
+      height: 20px;
+      background: #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+    `;
+    
+    const progressFill = document.createElement("div");
+    progressFill.id = "progressFill";
+    progressFill.style.cssText = `
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #FBBF24, #F59E0B);
+      transition: width 0.3s ease;
+    `;
+    
+    const progressPercent = document.createElement("p");
+    progressPercent.id = "progressPercent";
+    progressPercent.textContent = "0%";
+    progressPercent.style.fontSize = "16px";
+    progressPercent.style.color = "#6b7280";
+    
+    progressBar.appendChild(progressFill);
+    progressContainer.appendChild(progressText);
+    progressContainer.appendChild(progressBar);
+    progressContainer.appendChild(progressPercent);
+    
+    mapStage.parentNode.insertBefore(progressContainer, mapStage);
+  }
 
   try {
+    const durationSeconds = Number(durationInput.value || 40);
+    const formatKey = getSelectedFormatKey();
+    const fps = 30;
+    
+    // Calculate total frames
+    const totalSeconds = durationSeconds + Math.max(2, Math.round(durationSeconds * 0.18));
+    const totalFrames = Math.ceil(totalSeconds * fps);
+    
+    // Render frames one by one in background
+    const frames = [];
+    const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
+    const cfg = getActiveCameraConfig();
+    const segmentCount = activePoints.length - 1;
+    
+    for (let i = 0; i < totalFrames; i++) {
+      const progress = i / totalFrames;
+      
+      // Set animation progress
+      setProgress(progress);
+      
+      // Wait for map to settle
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Capture frame
+      const canvas = map.getCanvas();
+      const frameData = canvas.toDataURL('image/png');
+      frames.push(frameData);
+      
+      // Update progress bar
+      const percent = Math.round((i + 1) / totalFrames * 100);
+      const progressFill = document.getElementById("progressFill");
+      const progressPercent = document.getElementById("progressPercent");
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (progressPercent) progressPercent.textContent = `${percent}%`;
+      
+      // Allow UI to update
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    
+    setStatus("Frames gerendert, erstelle Video...");
+    
+    // Create video from frames using MediaRecorder
+    const stream = canvas.captureStream(30);
+    const mimeType = selectRecordingMimeType();
+    const targetBitrate = Math.max(12000000, Math.floor(canvas.width * canvas.height * 6));
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: targetBitrate,
+    });
+    
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+    
+    const stopPromise = new Promise((resolve) => {
+      recorder.onstop = () => resolve();
+    });
+    
     recorder.start();
-
-    const finished = await startAnimation();
+    
+    // Replay the captured frames
+    for (let i = 0; i < frames.length; i++) {
+      setProgress(i / frames.length);
+      await new Promise(resolve => setTimeout(resolve, 33)); // ~30fps
+    }
+    
     recorder.stop();
     await stopPromise;
-
-    if (!finished) {
-      setStatus("Aufnahme beendet, aber Animation ist fehlgeschlagen.");
-      return;
-    }
-
+    
     if (chunks.length === 0) {
-      setStatus("Keine Videodaten aufgenommen. Bitte Browser-Konsole pruefen.");
+      setStatus("Keine Videodaten aufgenommen.");
       return;
     }
-
+    
     const blob = new Blob(chunks, { type: mimeType });
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2169,10 +2259,20 @@ async function recordAnimationAndDownload() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
-
-    setStatus("Aufnahme fertig. Download gestartet (.webm). Fuer .mp4 bitte FFmpeg nutzen.");
+    
+    setStatus("Video fertig heruntergeladen (.webm).");
+  } catch (error) {
+    setStatus(`Fehler beim Rendern: ${error.message}`);
   } finally {
-    stream.getTracks().forEach((track) => track.stop());
+    // Restore UI
+    const progressContainer = document.getElementById("renderProgress");
+    if (progressContainer) {
+      progressContainer.remove();
+    }
+    if (mapStage && mapFrame) {
+      mapStage.style.display = "";
+    }
+    
     isRecording = false;
     playButton.disabled = routePoints.length < 2;
     recordButton.disabled = routePoints.length < 2;
