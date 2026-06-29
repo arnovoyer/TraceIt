@@ -64,14 +64,14 @@ const ALTITUDE_SVG = {
 };
 
 const CAMERA_CONFIG = {
-  pitch: 78,
-  zoom: 16.2,
-  sideOffsetM: 85,
-  backOffsetM: 85,
+  pitch: 72,
+  zoom: 15.8,
+  sideOffsetM: 50,
+  backOffsetM: 70,
   centerSmoothing: 0.032,
   bearingSmoothing: 0.038,
-  lookAheadPoints: 56,
-  focusAheadPoints: 18,
+  lookAheadPoints: 70,
+  focusAheadPoints: 30,
   bearingWindow: 30,
   maxBearingSpeedDegPerSec: 16,
   outroPitch: 16,
@@ -81,27 +81,29 @@ const CAMERA_CONFIG = {
 
 const FORMAT_CAMERA_OVERRIDES = {
   landscape: {
-    sideOffsetM: 85,
-    backOffsetM: 85,
-    zoom: 16.2,
-    pitch: 78,
+    sideOffsetM: 45,
+    backOffsetM: 65,
+    zoom: 15.8,
+    pitch: 72,
+    lookAheadPoints: 70,
+    focusAheadPoints: 30,
     outroPitch: 16,
     outroPadding: 68,
   },
   portrait: {
     sideOffsetM: 0,
-    backOffsetM: 55,
-    zoom: 15.6,
-    pitch: 74,
-    lookAheadPoints: 48,
-    focusAheadPoints: 16,
+    backOffsetM: 45,
+    zoom: 15.2,
+    pitch: 68,
+    lookAheadPoints: 55,
+    focusAheadPoints: 22,
     bearingWindow: 34,
     maxBearingSpeedDegPerSec: 13,
     headAnchorX: 0.5,
-    headAnchorY: 0.66,
-    viewportMarginX: 0.12,
-    viewportMarginTop: 0.14,
-    viewportMarginBottom: 0.1,
+    headAnchorY: 0.7,
+    viewportMarginX: 0.1,
+    viewportMarginTop: 0.12,
+    viewportMarginBottom: 0.08,
     outroPitch: 6,
     outroPadding: {
       top: 145,
@@ -1610,12 +1612,12 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const cfg = getActiveCameraConfig();
   const isPortrait = formatKey === "portrait";
 
-  const marginX = cfg.viewportMarginX ?? (isPortrait ? 0.12 : 0.08);
-  const marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.14 : 0.1);
-  const marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.1 : 0.08);
+  const marginX = cfg.viewportMarginX ?? (isPortrait ? 0.1 : 0.08);
+  const marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.1 : 0.08);
+  const marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.08 : 0.06);
   const anchorX = cfg.headAnchorX ?? 0.5;
-  const anchorY = cfg.headAnchorY ?? (isPortrait ? 0.66 : 0.6);
-  const pullStrength = isPortrait ? 0.5 : 0.28;
+  const anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
+  const pullStrength = isPortrait ? 0.45 : 0.25;
 
   map.jumpTo({
     center: [rawCenter.lon, rawCenter.lat],
