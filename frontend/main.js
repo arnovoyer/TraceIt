@@ -283,62 +283,50 @@ function makeMarkerSvg(kind) {
 
   if (kind === "start") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="100" viewBox="0 0 80 100">
         <defs>
-          <linearGradient id="startGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#22c55e"/>
-            <stop offset="100%" style="stop-color:#16a34a"/>
+          <linearGradient id="startGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFD600"/>
+            <stop offset="100%" stop-color="#FFB300"/>
           </linearGradient>
-          <filter id="startShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#14532d" flood-opacity="0.4"/>
+          <radialGradient id="startGlow" cx="50%" cy="40%" r="50%">
+            <stop offset="0%" stop-color="#FFEB3B" stop-opacity="0.8"/>
+            <stop offset="100%" stop-color="#FFD600" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="startShadow" x="-100%" y="-100%" width="300%" height="300%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#FFC107" flood-opacity="0.5"/>
           </filter>
         </defs>
-        <circle cx="32" cy="30" r="22" fill="url(#startGrad)" stroke="#14532d" stroke-width="2" filter="url(#startShadow)"/>
-        <path d="M32 58 L23 41 H41 Z" fill="url(#startGrad)" filter="url(#startShadow)"/>
-        <rect x="22" y="18" width="20" height="14" rx="1.5" fill="#ffffff" stroke="#14532d" stroke-width="0.5"/>
-        <rect x="22" y="18" width="10" height="7" fill="#16a34a"/>
-        <rect x="22" y="25" width="10" height="7" fill="#ffffff"/>
-        <rect x="32" y="18" width="10" height="7" fill="#ffffff"/>
-        <rect x="32" y="25" width="10" height="7" fill="#16a34a"/>
-        <line x1="22" y1="25" x2="42" y2="25" stroke="#14532d" stroke-width="0.8"/>
-        <line x1="32" y1="18" x2="32" y2="32" stroke="#14532d" stroke-width="1.2"/>
-        <circle cx="32" cy="30" r="3" fill="#ffffff" opacity="0.9"/>
+        <circle cx="40" cy="38" r="28" fill="url(#startGlow)"/>
+        <circle cx="40" cy="38" r="20" fill="url(#startGrad)" stroke="#FFFFFF" stroke-width="3" filter="url(#startShadow)"/>
+        <circle cx="40" cy="38" r="12" fill="#FFFFFF"/>
+        <text x="40" y="44" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#FF8F00">S</text>
+        <path d="M40 68 L27 46 H53 Z" fill="url(#startGrad)" stroke="#FFFFFF" stroke-width="2"/>
       </svg>
     `;
   }
 
   if (kind === "target") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="100" viewBox="0 0 80 100">
         <defs>
-          <linearGradient id="targetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#ef4444"/>
-            <stop offset="100%" style="stop-color:#dc2626"/>
+          <linearGradient id="targetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FF5252"/>
+            <stop offset="100%" stop-color="#D32F2F"/>
           </linearGradient>
-          <filter id="targetShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#991b1b" flood-opacity="0.4"/>
+          <radialGradient id="targetGlow" cx="50%" cy="40%" r="50%">
+            <stop offset="0%" stop-color="#FF8A80" stop-opacity="0.8"/>
+            <stop offset="100%" stop-color="#FF5252" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="targetShadow" x="-100%" y="-100%" width="300%" height="300%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#F44336" flood-opacity="0.5"/>
           </filter>
         </defs>
-        <circle cx="32" cy="30" r="22" fill="url(#targetGrad)" stroke="#991b1b" stroke-width="2" filter="url(#targetShadow)"/>
-        <path d="M32 58 L23 41 H41 Z" fill="url(#targetGrad)" filter="url(#targetShadow)"/>
-        <rect x="21" y="17" width="22" height="16" rx="1.5" fill="#ffffff" stroke="#991b1b" stroke-width="0.5"/>
-        <rect x="21" y="17" width="5.5" height="4" fill="#111827"/>
-        <rect x="26.5" y="17" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="32" y="17" width="5.5" height="4" fill="#111827"/>
-        <rect x="37.5" y="17" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="21" y="21" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="26.5" y="21" width="5.5" height="4" fill="#111827"/>
-        <rect x="32" y="21" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="37.5" y="21" width="5.5" height="4" fill="#111827"/>
-        <rect x="21" y="25" width="5.5" height="4" fill="#111827"/>
-        <rect x="26.5" y="25" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="32" y="25" width="5.5" height="4" fill="#111827"/>
-        <rect x="37.5" y="25" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="21" y="29" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="26.5" y="29" width="5.5" height="4" fill="#111827"/>
-        <rect x="32" y="29" width="5.5" height="4" fill="#ffffff"/>
-        <rect x="37.5" y="29" width="5.5" height="4" fill="#111827"/>
-        <circle cx="32" cy="30" r="3" fill="#ffffff" opacity="0.9"/>
+        <circle cx="40" cy="38" r="28" fill="url(#targetGlow)"/>
+        <circle cx="40" cy="38" r="20" fill="url(#targetGrad)" stroke="#FFFFFF" stroke-width="3" filter="url(#targetShadow)"/>
+        <circle cx="40" cy="38" r="12" fill="#FFFFFF"/>
+        <text x="40" y="44" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#C62828">Z</text>
+        <path d="M40 68 L27 46 H53 Z" fill="url(#targetGrad)" stroke="#FFFFFF" stroke-width="2"/>
       </svg>
     `;
   }
@@ -386,9 +374,9 @@ function ensureMarkerLayers() {
     });
   }
 
-  if (!map.getLayer("route-line-glow")) {
+  if (!map.getLayer("route-line-glow-outer")) {
     map.addLayer({
-      id: "route-line-glow",
+      id: "route-line-glow-outer",
       type: "line",
       source: "route",
       layout: {
@@ -396,17 +384,43 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FFD700",
-        "line-opacity": 0.4,
-        "line-blur": 2,
+        "line-color": "#FFD600",
+        "line-opacity": 0.35,
+        "line-blur": 8,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 4,
-          14, 8,
-          16, 14,
-          18, 20,
+          12, 10,
+          14, 16,
+          16, 26,
+          18, 36,
+        ],
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-glow-inner")) {
+    map.addLayer({
+      id: "route-line-glow-inner",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFEE58",
+        "line-opacity": 0.5,
+        "line-blur": 3,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 5,
+          14, 9,
+          16, 15,
+          18, 21,
         ],
       },
     });
@@ -423,15 +437,40 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#FFFFFF",
-        "line-opacity": 0.98,
+        "line-opacity": 1,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 1.5,
-          14, 2.5,
-          16, 4,
-          18, 5.5,
+          12, 2.5,
+          14, 4,
+          16, 6.5,
+          18, 9,
+        ],
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-highlight")) {
+    map.addLayer({
+      id: "route-line-highlight",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFEB3B",
+        "line-opacity": 0.7,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 0.8,
+          14, 1.5,
+          16, 2.2,
+          18, 3,
         ],
       },
     });
@@ -505,7 +544,7 @@ function ensureMarkerLayers() {
       source: "routeEndpoints",
       layout: {
         "icon-image": ["match", ["get", "kind"], "start", "marker-start", "marker-target"],
-        "icon-size": 0.82,
+        "icon-size": 0.7,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "bottom",
