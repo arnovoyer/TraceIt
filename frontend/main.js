@@ -1518,15 +1518,6 @@ function resetAnimatedRouteLine() {
   map.getSource("route").setData(createLineFeature([[first.lon, first.lat]]));
 }
 
-function updateRouteHead(currentPoint, currentBearing) {
-  const headSource = map.getSource("routeHead");
-  if (!headSource) {
-    return;
-  }
-
-  headSource.setData(createPointFeature(currentPoint.lon, currentPoint.lat, { bearing: currentBearing }));
-}
-
 function getStableBearing(points, segmentIndex) {
   const cfg = getActiveCameraConfig();
   
@@ -1636,21 +1627,6 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 function clearExistingRoute() {
   clearInsightMarkers();
 
-  if (map.getLayer("routeHeadGlow")) {
-    map.removeLayer("routeHeadGlow");
-  }
-  if (map.getLayer("routeHead")) {
-    map.removeLayer("routeHead");
-  }
-  if (map.getLayer("routeHeadCore")) {
-    map.removeLayer("routeHeadCore");
-  }
-  if (map.getLayer("routeHeadRing")) {
-    map.removeLayer("routeHeadRing");
-  }
-  if (map.getSource("routeHead")) {
-    map.removeSource("routeHead");
-  }
   if (map.getSource("route")) {
     map.getSource("route").setData(createLineFeature([]));
   }
@@ -1665,50 +1641,6 @@ function drawRouteLine() {
   if (routeSource) {
     routeSource.setData(createLineFeature(initialCoords));
   }
-
-  map.addSource("routeHead", {
-    type: "geojson",
-    data: createPointFeature(routePoints[0].lon, routePoints[0].lat),
-  });
-
-  // Route head as a tapered line segment - integrated with the route
-  map.addLayer({
-    id: "routeHeadGlow",
-    type: "circle",
-    source: "routeHead",
-    paint: {
-      "circle-radius": 12,
-      "circle-color": "#FBBF24",
-      "circle-opacity": 0.6,
-      "circle-blur": 2.5,
-    },
-  });
-
-  // Main head - wider than route line but same color scheme
-  map.addLayer({
-    id: "routeHead",
-    type: "circle",
-    source: "routeHead",
-    paint: {
-      "circle-radius": 6,
-      "circle-color": "#FFFFFF",
-      "circle-stroke-width": 3,
-      "circle-stroke-color": "#FBBF24",
-      "circle-opacity": 1,
-    },
-  });
-
-  // Bright center for visibility
-  map.addLayer({
-    id: "routeHeadCore",
-    type: "circle",
-    source: "routeHead",
-    paint: {
-      "circle-radius": 3,
-      "circle-color": "#fff36d",
-      "circle-opacity": 1,
-    },
-  });
 }
 
 function fitMapToRoute() {
@@ -1891,7 +1823,6 @@ function startAnimation() {
     const reachedPhotoSpotIds = new Set();
 
     resetAnimatedRouteLine();
-    updateRouteHead(routePoints[0], 0);
     updateAltitudeOverlayProgress(0);
 
     const animate = (now) => {
@@ -2040,8 +1971,6 @@ function startAnimation() {
           lastTrailUpdateAt = now;
         }
 
-        updateRouteHead(smoothRoute, smoothedBearing);
-
         map.jumpTo({
           center: [smoothedCenter.lon, smoothedCenter.lat],
           bearing: smoothedBearing,
@@ -2058,8 +1987,6 @@ function startAnimation() {
             const finalCoords = routePoints.map((p) => [p.lon, p.lat]);
             map.getSource("route").setData(createLineFeature(finalCoords));
           }
-          const lastPoint = routePoints[routePoints.length - 1];
-          updateRouteHead(lastPoint, smoothedBearing ?? map.getBearing());
 
           const outroDuration = Math.min(3200, Math.max(1800, durationMs * 0.18));
           setStatus("Route fertig, Kamera zoomt fuer Gesamtansicht raus ...");
@@ -2467,8 +2394,6 @@ window.gpxOverlay = {
     if (map.getSource("route")) {
       map.getSource("route").setData(createLineFeature(trailCoords));
     }
-
-    updateRouteHead(smoothRoute, rawBearing);
 
     map.jumpTo({
       center: [offsetCenter.lon, offsetCenter.lat],
