@@ -379,9 +379,9 @@ function ensureMarkerLayers() {
     });
   }
 
-  if (!map.getLayer("route-line-floating-glow")) {
+  if (!map.getLayer("route-line-glow")) {
     map.addLayer({
-      id: "route-line-floating-glow",
+      id: "route-line-glow",
       type: "line",
       source: "route",
       layout: {
@@ -389,52 +389,25 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FFF3C4",
-        "line-opacity": 0.3,
-        "line-blur": 22,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 20,
-          14, 30,
-          16, 45,
-          18, 62,
-        ],
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-shadow")) {
-    map.addLayer({
-      id: "route-line-shadow",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#1A1A1A",
-        "line-opacity": 0.4,
-        "line-blur": 10,
+        "line-color": "#FBC02D",
+        "line-opacity": 0.2,
+        "line-blur": 8,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
           12, 6,
           14, 10,
-          16, 15,
-          18, 21,
+          16, 16,
+          18, 22,
         ],
-        "line-translate": [2, 8],
       },
     });
   }
 
-  if (!map.getLayer("route-line-base")) {
+  if (!map.getLayer("route-line")) {
     map.addLayer({
-      id: "route-line-base",
+      id: "route-line",
       type: "line",
       source: "route",
       layout: {
@@ -442,49 +415,24 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FDD835",
-        "line-opacity": 1,
+        "line-color": "#FFD600",
+        "line-opacity": 0.95,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 5,
-          14, 8,
-          16, 12,
-          18, 17,
+          12, 2.5,
+          14, 4,
+          16, 6,
+          18, 8.5,
         ],
       },
     });
   }
 
-  if (!map.getLayer("route-line-main")) {
+  if (!map.getLayer("route-line-edge")) {
     map.addLayer({
-      id: "route-line-main",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FFEB3B",
-        "line-opacity": 1,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 3.5,
-          14, 5.5,
-          16, 8.5,
-          18, 12,
-        ],
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-highlight")) {
-    map.addLayer({
-      id: "route-line-highlight",
+      id: "route-line-edge",
       type: "line",
       source: "route",
       layout: {
@@ -493,83 +441,16 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#FFFFFF",
-        "line-opacity": 0.9,
+        "line-opacity": 0.8,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 1.2,
-          14, 2,
-          16, 3,
-          18, 4.2,
+          12, 0.8,
+          14, 1.2,
+          16, 1.8,
+          18, 2.5,
         ],
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-front-glow")) {
-    map.addLayer({
-      id: "route-line-front-glow",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FFF9C4",
-        "line-opacity": 0.5,
-        "line-blur": 10,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 10,
-          14, 15,
-          16, 23,
-          18, 32,
-        ],
-        "line-gradient": [
-          "interpolate",
-          ["linear"],
-          ["line-progress"],
-          0, "rgba(255, 249, 196, 0)",
-          0.75, "rgba(255, 249, 196, 0)",
-          1, "rgba(255, 249, 196, 0.5)"
-        ]
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-front")) {
-    map.addLayer({
-      id: "route-line-front",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FFC107",
-        "line-opacity": 1,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 8,
-          14, 13,
-          16, 20,
-          18, 28,
-        ],
-        "line-gradient": [
-          "interpolate",
-          ["linear"],
-          ["line-progress"],
-          0, "rgba(255, 193, 7, 0)",
-          0.8, "rgba(255, 193, 7, 0)",
-          1, "rgba(255, 193, 7, 1)"
-        ]
       },
     });
   }
@@ -1764,6 +1645,14 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 function clearExistingRoute() {
   clearInsightMarkers();
 
+  if (map.getLayer("route-line-floating-glow")) map.removeLayer("route-line-floating-glow");
+  if (map.getLayer("route-line-shadow")) map.removeLayer("route-line-shadow");
+  if (map.getLayer("route-line-bottom")) map.removeLayer("route-line-bottom");
+  if (map.getLayer("route-line-middle")) map.removeLayer("route-line-middle");
+  if (map.getLayer("route-line-top")) map.removeLayer("route-line-top");
+  if (map.getLayer("route-line-top-highlight")) map.removeLayer("route-line-top-highlight");
+  if (map.getLayer("route-line-front-glow")) map.removeLayer("route-line-front-glow");
+  if (map.getLayer("route-line-front")) map.removeLayer("route-line-front");
   if (map.getLayer("route-line-glow")) map.removeLayer("route-line-glow");
   if (map.getLayer("route-line-glow-inner")) map.removeLayer("route-line-glow-inner");
   if (map.getLayer("route-line")) map.removeLayer("route-line");
@@ -1772,6 +1661,7 @@ function clearExistingRoute() {
   if (map.getLayer("route-line-base")) map.removeLayer("route-line-base");
   if (map.getLayer("route-line-main")) map.removeLayer("route-line-main");
   if (map.getLayer("route-line-highlight")) map.removeLayer("route-line-highlight");
+  if (map.getLayer("route-line-edge")) map.removeLayer("route-line-edge");
   
   if (map.getSource("route")) {
     map.getSource("route").setData(createLineFeature([]));
