@@ -64,16 +64,16 @@ const ALTITUDE_SVG = {
 };
 
 const CAMERA_CONFIG = {
-  pitch: 72,
-  zoom: 15.8,
-  sideOffsetM: 50,
-  backOffsetM: 70,
-  centerSmoothing: 0.032,
-  bearingSmoothing: 0.038,
-  lookAheadPoints: 70,
-  focusAheadPoints: 30,
-  bearingWindow: 30,
-  maxBearingSpeedDegPerSec: 16,
+  pitch: 65, // Less steep so we can see more!
+  zoom: 15.5,
+  sideOffsetM: 40,
+  backOffsetM: 60,
+  centerSmoothing: 0.06, // Faster camera centering
+  bearingSmoothing: 0.08, // Faster bearing smoothing!
+  lookAheadPoints: 80, // Look further ahead
+  focusAheadPoints: 35,
+  bearingWindow: 25,
+  maxBearingSpeedDegPerSec: 28, // Much faster max turn speed!
   outroPitch: 16,
   outroBearing: 0,
   outroPadding: 68,
@@ -81,29 +81,32 @@ const CAMERA_CONFIG = {
 
 const FORMAT_CAMERA_OVERRIDES = {
   landscape: {
-    sideOffsetM: 45,
-    backOffsetM: 65,
-    zoom: 15.8,
-    pitch: 72,
-    lookAheadPoints: 70,
-    focusAheadPoints: 30,
+    sideOffsetM: 35,
+    backOffsetM: 55,
+    zoom: 15.5,
+    pitch: 65,
+    lookAheadPoints: 80,
+    focusAheadPoints: 35,
+    bearingSmoothing: 0.08,
+    maxBearingSpeedDegPerSec: 28,
     outroPitch: 16,
     outroPadding: 68,
   },
   portrait: {
     sideOffsetM: 0,
-    backOffsetM: 45,
-    zoom: 15.2,
-    pitch: 68,
-    lookAheadPoints: 55,
-    focusAheadPoints: 22,
-    bearingWindow: 34,
-    maxBearingSpeedDegPerSec: 13,
+    backOffsetM: 40,
+    zoom: 15.0,
+    pitch: 60,
+    lookAheadPoints: 65,
+    focusAheadPoints: 25,
+    bearingWindow: 28,
+    maxBearingSpeedDegPerSec: 24,
+    bearingSmoothing: 0.08,
     headAnchorX: 0.5,
-    headAnchorY: 0.7,
+    headAnchorY: 0.72, // Even lower to see more ahead!
     viewportMarginX: 0.1,
-    viewportMarginTop: 0.12,
-    viewportMarginBottom: 0.08,
+    viewportMarginTop: 0.08,
+    viewportMarginBottom: 0.06,
     outroPitch: 6,
     outroPadding: {
       top: 145,
@@ -386,17 +389,17 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FFE082",
-        "line-opacity": 0.25,
-        "line-blur": 20,
+        "line-color": "#FFF3C4",
+        "line-opacity": 0.3,
+        "line-blur": 22,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 18,
-          14, 28,
-          16, 42,
-          18, 58,
+          12, 20,
+          14, 30,
+          16, 45,
+          18, 62,
         ],
       },
     });
@@ -412,9 +415,35 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#000000",
-        "line-opacity": 0.45,
-        "line-blur": 8,
+        "line-color": "#1A1A1A",
+        "line-opacity": 0.4,
+        "line-blur": 10,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 6,
+          14, 10,
+          16, 15,
+          18, 21,
+        ],
+        "line-translate": [2, 8],
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-base")) {
+    map.addLayer({
+      id: "route-line-base",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FDD835",
+        "line-opacity": 1,
         "line-width": [
           "interpolate",
           ["linear"],
@@ -424,64 +453,13 @@ function ensureMarkerLayers() {
           16, 12,
           18, 17,
         ],
-        "line-translate": [2, 6],
       },
     });
   }
 
-  if (!map.getLayer("route-line-bottom")) {
+  if (!map.getLayer("route-line-main")) {
     map.addLayer({
-      id: "route-line-bottom",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#E65100",
-        "line-opacity": 0.9,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 4.5,
-          14, 7,
-          16, 10.5,
-          18, 14.5,
-        ],
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-middle")) {
-    map.addLayer({
-      id: "route-line-middle",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FFB300",
-        "line-opacity": 0.95,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 3.2,
-          14, 5,
-          16, 7.5,
-          18, 10.5,
-        ],
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-top")) {
-    map.addLayer({
-      id: "route-line-top",
+      id: "route-line-main",
       type: "line",
       source: "route",
       layout: {
@@ -495,18 +473,18 @@ function ensureMarkerLayers() {
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 2,
-          14, 3.2,
-          16, 4.8,
-          18, 6.7,
+          12, 3.5,
+          14, 5.5,
+          16, 8.5,
+          18, 12,
         ],
       },
     });
   }
 
-  if (!map.getLayer("route-line-top-highlight")) {
+  if (!map.getLayer("route-line-highlight")) {
     map.addLayer({
-      id: "route-line-top-highlight",
+      id: "route-line-highlight",
       type: "line",
       source: "route",
       layout: {
@@ -515,16 +493,83 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#FFFFFF",
-        "line-opacity": 0.85,
+        "line-opacity": 0.9,
         "line-width": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          12, 0.8,
-          14, 1.3,
-          16, 2,
-          18, 2.8,
+          12, 1.2,
+          14, 2,
+          16, 3,
+          18, 4.2,
         ],
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-front-glow")) {
+    map.addLayer({
+      id: "route-line-front-glow",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFF9C4",
+        "line-opacity": 0.5,
+        "line-blur": 10,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 10,
+          14, 15,
+          16, 23,
+          18, 32,
+        ],
+        "line-gradient": [
+          "interpolate",
+          ["linear"],
+          ["line-progress"],
+          0, "rgba(255, 249, 196, 0)",
+          0.75, "rgba(255, 249, 196, 0)",
+          1, "rgba(255, 249, 196, 0.5)"
+        ]
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-front")) {
+    map.addLayer({
+      id: "route-line-front",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFC107",
+        "line-opacity": 1,
+        "line-width": [
+          "interpolate",
+          ["linear"],
+          ["zoom"],
+          12, 8,
+          14, 13,
+          16, 20,
+          18, 28,
+        ],
+        "line-gradient": [
+          "interpolate",
+          ["linear"],
+          ["line-progress"],
+          0, "rgba(255, 193, 7, 0)",
+          0.8, "rgba(255, 193, 7, 0)",
+          1, "rgba(255, 193, 7, 1)"
+        ]
       },
     });
   }
