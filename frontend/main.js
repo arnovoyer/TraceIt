@@ -68,12 +68,12 @@ const CAMERA_CONFIG = {
   zoom: 15.4,
   sideOffsetM: 38,
   backOffsetM: 58,
-  centerSmoothing: 0.12, // More responsive, less jitter
-  bearingSmoothing: 0.12, // More responsive, less jitter
+  centerSmoothing: 0.03, // Ultra smooth drone-like
+  bearingSmoothing: 0.03, // Ultra smooth drone-like
   lookAheadPoints: 90, // Look even further ahead
   focusAheadPoints: 40,
   bearingWindow: 20,
-  maxBearingSpeedDegPerSec: 32, // Even faster max turn speed!
+  maxBearingSpeedDegPerSec: 18, // More controlled turn speed
   outroPitch: 16,
   outroBearing: 0,
   outroPadding: 68,
@@ -87,9 +87,9 @@ const FORMAT_CAMERA_OVERRIDES = {
     pitch: 62,
     lookAheadPoints: 90,
     focusAheadPoints: 40,
-    bearingSmoothing: 0.12,
-    centerSmoothing: 0.12,
-    maxBearingSpeedDegPerSec: 32,
+    bearingSmoothing: 0.03,
+    centerSmoothing: 0.03,
+    maxBearingSpeedDegPerSec: 18,
     headAnchorX: 0.5,
     headAnchorY: 0.62, // Higher
     outroPitch: 16,
@@ -103,9 +103,9 @@ const FORMAT_CAMERA_OVERRIDES = {
     lookAheadPoints: 95,
     focusAheadPoints: 42,
     bearingWindow: 20,
-    maxBearingSpeedDegPerSec: 32,
-    bearingSmoothing: 0.12,
-    centerSmoothing: 0.12,
+    maxBearingSpeedDegPerSec: 16,
+    bearingSmoothing: 0.03,
+    centerSmoothing: 0.03,
     headAnchorX: 0.5,
     headAnchorY: 0.63, // Higher up, not too low
     viewportMarginX: 0.08,
@@ -1598,7 +1598,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.08 : 0.06);
   const anchorX = cfg.headAnchorX ?? 0.5;
   const anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
-  const pullStrength = isPortrait ? 0.45 : 0.25;
+  const pullStrength = isPortrait ? 0.15 : 0.08;
 
   map.jumpTo({
     center: [rawCenter.lon, rawCenter.lat],
