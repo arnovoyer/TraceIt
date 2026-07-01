@@ -64,16 +64,16 @@ const ALTITUDE_SVG = {
 };
 
 const CAMERA_CONFIG = {
-  pitch: 65, // Less steep so we can see more!
-  zoom: 15.5,
-  sideOffsetM: 40,
-  backOffsetM: 60,
-  centerSmoothing: 0.06, // Faster camera centering
-  bearingSmoothing: 0.08, // Faster bearing smoothing!
-  lookAheadPoints: 80, // Look further ahead
-  focusAheadPoints: 35,
-  bearingWindow: 25,
-  maxBearingSpeedDegPerSec: 28, // Much faster max turn speed!
+  pitch: 62, // Less steep
+  zoom: 15.4,
+  sideOffsetM: 38,
+  backOffsetM: 58,
+  centerSmoothing: 0.12, // More responsive, less jitter
+  bearingSmoothing: 0.12, // More responsive, less jitter
+  lookAheadPoints: 90, // Look even further ahead
+  focusAheadPoints: 40,
+  bearingWindow: 20,
+  maxBearingSpeedDegPerSec: 32, // Even faster max turn speed!
   outroPitch: 16,
   outroBearing: 0,
   outroPadding: 68,
@@ -83,31 +83,34 @@ const FORMAT_CAMERA_OVERRIDES = {
   landscape: {
     sideOffsetM: 35,
     backOffsetM: 55,
-    zoom: 15.5,
-    pitch: 65,
-    lookAheadPoints: 80,
-    focusAheadPoints: 35,
-    bearingSmoothing: 0.08,
-    maxBearingSpeedDegPerSec: 28,
+    zoom: 15.4,
+    pitch: 62,
+    lookAheadPoints: 90,
+    focusAheadPoints: 40,
+    bearingSmoothing: 0.12,
+    centerSmoothing: 0.12,
+    maxBearingSpeedDegPerSec: 32,
+    headAnchorX: 0.5,
+    headAnchorY: 0.62, // Higher
     outroPitch: 16,
     outroPadding: 68,
   },
   portrait: {
     sideOffsetM: 30,
     backOffsetM: 60,
-    zoom: 15.3,
-    pitch: 64,
-    lookAheadPoints: 85,
-    focusAheadPoints: 38,
-    bearingWindow: 25,
-    maxBearingSpeedDegPerSec: 28,
-    bearingSmoothing: 0.08,
-    centerSmoothing: 0.06,
+    zoom: 15.2,
+    pitch: 61,
+    lookAheadPoints: 95,
+    focusAheadPoints: 42,
+    bearingWindow: 20,
+    maxBearingSpeedDegPerSec: 32,
+    bearingSmoothing: 0.12,
+    centerSmoothing: 0.12,
     headAnchorX: 0.5,
-    headAnchorY: 0.68,
-    viewportMarginX: 0.09,
-    viewportMarginTop: 0.07,
-    viewportMarginBottom: 0.06,
+    headAnchorY: 0.63, // Higher up, not too low
+    viewportMarginX: 0.08,
+    viewportMarginTop: 0.06,
+    viewportMarginBottom: 0.05,
     outroPitch: 6,
     outroPadding: {
       top: 145,
