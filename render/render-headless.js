@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import process from "node:process";
@@ -60,8 +61,18 @@ function ensureDir(dirPath) {
   return fs.mkdir(dirPath, { recursive: true });
 }
 
+function cleanDir(dirPath) {
+  if (fsSync.existsSync(dirPath)) {
+    const files = fsSync.readdirSync(dirPath);
+    for (const file of files) {
+      fsSync.unlinkSync(path.join(dirPath, file));
+    }
+  }
+}
+
 function runFfmpeg(framesGlob, fps, outputPath) {
   return new Promise((resolve, reject) => {
+    const ffmpegCmd = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
     const ffmpegArgs = [
       "-y",
       "-framerate",
@@ -79,7 +90,7 @@ function runFfmpeg(framesGlob, fps, outputPath) {
       outputPath,
     ];
 
-    const child = spawn("ffmpeg", ffmpegArgs, { stdio: "inherit" });
+    const child = spawn(ffmpegCmd, ffmpegArgs, { stdio: "inherit" });
     child.on("exit", (code) => {
       if (code === 0) {
         resolve();
@@ -99,9 +110,11 @@ async function main() {
 
   const absoluteGpx = path.resolve(args.gpx);
   const absoluteOutput = path.resolve(args.output);
-  const workDir = path.resolve("render", "tmp-frames");
+  const workDir = path.resolve(process.cwd(), "render", "tmp-frames");
 
+  console.log("Using work directory:", workDir);
   await ensureDir(workDir);
+  cleanDir(workDir); // Delete old frames before starting
 
   console.log("[1/5] Parsing GPX via backend ...");
   const parsed = await parseGpxThroughBackend(args.apiUrl, absoluteGpx);
