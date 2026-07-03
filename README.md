@@ -11,10 +11,7 @@ Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre 
   - MapLibre 3D (Terrain + Satelliten-Style)
   - Route zeichnen
   - Kamera folgt der Route mit dynamischem Bearing/Pitch
-- `android/`:
-  - Native Jetpack-Compose-App als Startpunkt
-  - Activity-Library, Import/Sync-, Editor- und Export-Screen als Gerüst
-  - Lokale Datenhaltung und spätere API-Anbindung sind dafür vorgesehen
+
 
 ## 1) Voraussetzungen
 

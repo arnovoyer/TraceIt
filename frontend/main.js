@@ -2139,92 +2139,57 @@ async function recordAnimationAndDownload() {
     const durationSeconds = Number(durationInput.value || 40);
     const formatKey = getSelectedFormatKey();
     const fps = 30;
+
+    setStatus("Video wird im Hintergrund gerendert...");
     
-    // Calculate total frames
-    const totalSeconds = durationSeconds + Math.max(2, Math.round(durationSeconds * 0.18));
-    const totalFrames = Math.ceil(totalSeconds * fps);
-    
-    // Render frames one by one in background
-    const frames = [];
-    const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
-    const cfg = getActiveCameraConfig();
-    const segmentCount = activePoints.length - 1;
-    
-    for (let i = 0; i < totalFrames; i++) {
-      const progress = i / totalFrames;
-      
-      // Set animation progress
-      setProgress(progress);
-      
-      // Wait for map to settle
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      // Capture frame
-      const canvas = map.getCanvas();
-      const frameData = canvas.toDataURL('image/png');
-      frames.push(frameData);
-      
-      // Update progress bar
-      const percent = Math.round((i + 1) / totalFrames * 100);
-      const progressFill = document.getElementById("progressFill");
-      const progressPercent = document.getElementById("progressPercent");
-      if (progressFill) progressFill.style.width = `${percent}%`;
-      if (progressPercent) progressPercent.textContent = `${percent}%`;
-      
-      // Allow UI to update
-      await new Promise(resolve => setTimeout(resolve, 0));
+    // Get the original GPX file from the input element
+    const gpxFile = gpxInput.files?.[0];
+    if (!gpxFile) {
+      throw new Error("Keine GPX-Datei gefunden. Bitte erneut hochladen.");
     }
-    
-    setStatus("Frames gerendert, erstelle Video...");
-    
-    // Create video from frames using MediaRecorder
-    const stream = canvas.captureStream(30);
-    const mimeType = selectRecordingMimeType();
-    const targetBitrate = Math.max(12000000, Math.floor(canvas.width * canvas.height * 6));
-    const chunks = [];
-    const recorder = new MediaRecorder(stream, {
-      mimeType,
-      videoBitsPerSecond: targetBitrate,
-    });
-    
-    recorder.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) {
-        chunks.push(event.data);
+
+    // Check health endpoint to make sure backend is up!
+    try {
+      const healthCheck = await fetch(`${API_BASE_URL}/health`);
+      if (!healthCheck.ok) {
+        throw new Error("Backend ist nicht erreichbar!");
       }
-    };
-    
-    const stopPromise = new Promise((resolve) => {
-      recorder.onstop = () => resolve();
-    });
-    
-    recorder.start();
-    
-    // Replay the captured frames
-    for (let i = 0; i < frames.length; i++) {
-      setProgress(i / frames.length);
-      await new Promise(resolve => setTimeout(resolve, 33)); // ~30fps
+    } catch {
+      throw new Error("Backend läuft nicht! Bitte starte das Backend auf Port 8000 und das Frontend auf Port 5173.");
     }
-    
-    recorder.stop();
-    await stopPromise;
-    
-    if (chunks.length === 0) {
-      setStatus("Keine Videodaten aufgenommen.");
-      return;
+
+    const formData = new FormData();
+    formData.append("file", gpxFile);
+
+    console.log("Sending request to render endpoint...");
+    const response = await fetch(
+      `${API_BASE_URL}/api/gpx/render?duration=${encodeURIComponent(durationSeconds)}&format=${encodeURIComponent(formatKey)}&fps=${encodeURIComponent(fps)}`,
+      { method: "POST", body: formData }
+    );
+
+    if (!response.ok) {
+      let errorText = "";
+      try {
+        errorText = await response.text();
+      } catch {}
+      throw new Error(errorText || `Rendern fehlgeschlagen (Status ${response.status})`);
     }
-    
-    const blob = new Blob(chunks, { type: mimeType });
+
+    // Download the video
+    console.log("Downloading rendered video...");
+    const blob = await response.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = `gpx-flight-${toTimestamp()}.webm`;
+    a.download = `gpx-video-${toTimestamp()}.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
-    
-    setStatus("Video fertig heruntergeladen (.webm).");
+
+    setStatus("Video fertig heruntergeladen (.mp4).");
   } catch (error) {
+    console.error("Render error:", error);
     setStatus(`Fehler beim Rendern: ${error.message}`);
   } finally {
     // Restore UI
@@ -2326,6 +2291,102 @@ map.on("click", (event) => {
   map.getCanvas().style.cursor = "";
 });
 
+function setProgress(progress) {
+  if (routePoints.length < 2) {
+    return false;
+  }
+
+  stopAnimation();
+
+  const durationSeconds = Number(durationInput.value || 40);
+  const durationMs = Math.max(5000, durationSeconds * 1000);
+  const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
+  const cfg = getActiveCameraConfig();
+  const segmentCount = activePoints.length - 1;
+
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+  const scaled = clampedProgress * segmentCount;
+  const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
+  const localT = scaled - segmentIndex;
+
+  updateAltitudeOverlayProgress(clampedProgress);
+  updateStatsVisibilityByProximity(segmentIndex);
+
+  const currentRouteIdx = segmentIndex;
+  const nextRouteIdx = Math.min(segmentIndex + 1, routePoints.length - 1);
+  let cameraAlpha = localT;
+  let routeAlpha = localT;
+
+  const currentRoutePt = routePoints[currentRouteIdx];
+  const nextRoutePt = routePoints[nextRouteIdx];
+  const elevationGain =
+    Number.isFinite(currentRoutePt?.ele) && Number.isFinite(nextRoutePt?.ele)
+      ? nextRoutePt.ele - currentRoutePt.ele
+      : 0;
+
+  if (elevationGain > 0) {
+    const slopeFactor = Math.max(0.4, 1.0 - elevationGain * 0.3);
+    cameraAlpha = localT * slopeFactor;
+    routeAlpha = localT * slopeFactor;
+  }
+
+  const smoothCam = interpolatePoint(
+    activePoints[segmentIndex],
+    activePoints[segmentIndex + 1],
+    cameraAlpha
+  );
+  const smoothRoute = interpolatePoint(
+    routePoints[currentRouteIdx],
+    routePoints[nextRouteIdx],
+    routeAlpha
+  );
+
+  // Dynamically adjust lookahead based on position in route to prevent off-track issues
+  const distanceFromEnd = activePoints.length - 1 - segmentIndex;
+  const dynamicLookAhead = Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd));
+  const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
+  
+  const lookAheadIndex = Math.min(
+    activePoints.length - 1,
+    segmentIndex + dynamicLookAhead
+  );
+  const rawBearing = getStableBearing(activePoints, lookAheadIndex);
+
+  const focusIndex = Math.min(
+    activePoints.length - 1,
+    segmentIndex + dynamicFocusAhead
+  );
+  const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
+  const offsetCenter = keepRouteHeadInViewport(
+    addHelicopterOffset(focusPoint, rawBearing),
+    smoothRoute,
+    rawBearing,
+    cfg.pitch,
+    cfg.zoom
+  );
+
+  // Update trail
+  const trailCoords = [];
+  for (let i = 0; i <= segmentIndex; i += 1) {
+    trailCoords.push([routePoints[i].lon, routePoints[i].lat]);
+  }
+  trailCoords.push([smoothRoute.lon, smoothRoute.lat]);
+
+  if (map.getSource("route")) {
+    map.getSource("route").setData(createLineFeature(trailCoords));
+  }
+
+  map.jumpTo({
+    center: [offsetCenter.lon, offsetCenter.lat],
+    bearing: rawBearing,
+    pitch: cfg.pitch,
+    zoom: cfg.zoom,
+    duration: 0,
+  });
+
+  return true;
+}
+
 applySelectedFormat();
 
 window.gpxOverlay = {
@@ -2346,101 +2407,7 @@ window.gpxOverlay = {
   play: async () => {
     return startAnimation();
   },
-  setProgress: (progress) => {
-    if (routePoints.length < 2) {
-      return false;
-    }
-
-    stopAnimation();
-
-    const durationSeconds = Number(durationInput.value || 40);
-    const durationMs = Math.max(5000, durationSeconds * 1000);
-    const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
-    const cfg = getActiveCameraConfig();
-    const segmentCount = activePoints.length - 1;
-
-    const clampedProgress = Math.min(1, Math.max(0, progress));
-    const scaled = clampedProgress * segmentCount;
-    const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
-    const localT = scaled - segmentIndex;
-
-    updateAltitudeOverlayProgress(clampedProgress);
-    updateStatsVisibilityByProximity(segmentIndex);
-
-    const currentRouteIdx = segmentIndex;
-    const nextRouteIdx = Math.min(segmentIndex + 1, routePoints.length - 1);
-    let cameraAlpha = localT;
-    let routeAlpha = localT;
-
-    const currentRoutePt = routePoints[currentRouteIdx];
-    const nextRoutePt = routePoints[nextRouteIdx];
-    const elevationGain =
-      Number.isFinite(currentRoutePt?.ele) && Number.isFinite(nextRoutePt?.ele)
-        ? nextRoutePt.ele - currentRoutePt.ele
-        : 0;
-
-    if (elevationGain > 0) {
-      const slopeFactor = Math.max(0.4, 1.0 - elevationGain * 0.3);
-      cameraAlpha = localT * slopeFactor;
-      routeAlpha = localT * slopeFactor;
-    }
-
-    const smoothCam = interpolatePoint(
-      activePoints[segmentIndex],
-      activePoints[segmentIndex + 1],
-      cameraAlpha
-    );
-    const smoothRoute = interpolatePoint(
-      routePoints[currentRouteIdx],
-      routePoints[nextRouteIdx],
-      routeAlpha
-    );
-
-    // Dynamically adjust lookahead based on position in route to prevent off-track issues
-    const distanceFromEnd = activePoints.length - 1 - segmentIndex;
-    const dynamicLookAhead = Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd));
-    const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
-    
-    const lookAheadIndex = Math.min(
-      activePoints.length - 1,
-      segmentIndex + dynamicLookAhead
-    );
-    const rawBearing = getStableBearing(activePoints, lookAheadIndex);
-
-    const focusIndex = Math.min(
-      activePoints.length - 1,
-      segmentIndex + dynamicFocusAhead
-    );
-    const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
-    const offsetCenter = keepRouteHeadInViewport(
-      addHelicopterOffset(focusPoint, rawBearing),
-      smoothRoute,
-      rawBearing,
-      cfg.pitch,
-      cfg.zoom
-    );
-
-    // Update trail
-    const trailCoords = [];
-    for (let i = 0; i <= segmentIndex; i += 1) {
-      trailCoords.push([routePoints[i].lon, routePoints[i].lat]);
-    }
-    trailCoords.push([smoothRoute.lon, smoothRoute.lat]);
-
-    if (map.getSource("route")) {
-      map.getSource("route").setData(createLineFeature(trailCoords));
-    }
-
-    map.jumpTo({
-      center: [offsetCenter.lon, offsetCenter.lat],
-      bearing: rawBearing,
-      pitch: cfg.pitch,
-      zoom: cfg.zoom,
-      duration: 0,
-    });
-
-    return true;
-  },
+  setProgress: setProgress,
 };
 
 playButton.addEventListener("click", () => {

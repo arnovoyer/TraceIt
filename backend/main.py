@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from io import StringIO
+from pathlib import Path
 from typing import Any
+import subprocess
+import tempfile
+import uuid
+from fastapi.responses import FileResponse
 
 import gpxpy
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -104,3 +109,67 @@ async def parse_gpx(file: UploadFile = File(...)) -> dict[str, Any]:
         "points": points_data,
         "line": route_geojson,
     }
+
+
+@app.post("/api/gpx/render")
+async def render_gpx(
+    file: UploadFile = File(...),
+    duration: int = 40,
+    format: str = "landscape",
+    fps: int = 30
+):
+    if not file.filename or not file.filename.lower().endswith(".gpx"):
+        raise HTTPException(status_code=400, detail="Please upload a .gpx file.")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Create temp directory for this render job
+    job_id = str(uuid.uuid4())
+    temp_dir = Path(tempfile.gettempdir()) / "gpx-video" / job_id
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save the uploaded GPX
+    gpx_path = temp_dir / "input.gpx"
+    gpx_path.write_bytes(raw)
+
+    # Run the headless renderer
+    output_path = temp_dir / "output.mp4"
+    import sys
+    render_dir = Path(__file__).parent.parent / "render"
+    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+    cmd = [
+        npm_cmd, "run", "render", "--",
+        "--gpx", str(gpx_path.absolute()),
+        "--output", str(output_path.absolute()),
+        "--duration", str(duration),
+        "--fps", str(fps),
+        "--format", format
+    ]
+
+    print(f"Starting render with command: {cmd}")
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(render_dir.absolute()),
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print("Render stdout:", result.stdout)
+        if result.stderr:
+            print("Render stderr:", result.stderr)
+    except subprocess.CalledProcessError as e:
+        print(f"Render failed with stdout: {e.stdout}")
+        print(f"Render failed with stderr: {e.stderr}")
+        raise HTTPException(status_code=500, detail=f"Rendering failed: {e.stderr or e.stdout}") from e
+
+    if not output_path.exists():
+        raise HTTPException(status_code=500, detail="Rendering failed: no output file")
+
+    return FileResponse(
+        path=str(output_path.absolute()),
+        media_type="video/mp4",
+        filename=f"gpx-video-{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
+    )
