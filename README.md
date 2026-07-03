@@ -98,41 +98,71 @@ Hinweis zu 9:16 und Bildausschnitt:
 - MapTiler Terrain RGB (Free Tier)
 - Alternativ: AWS Terrarium/Terrain-RGB kompatible öffentliche Quellen
 
-## 5) Videoexport-Option A: Puppeteer (Canvas aufnehmen)
+## 5) Videoexport per Terminal (Puppeteer + FFmpeg)
 
-Idee:
-1. Frontend-Route und Kameraanimation deterministic ablaufen lassen
-2. In Chromium per Puppeteer Seite öffnen
-3. Frames per `page.screenshot()` oder via MediaRecorder erfassen
-4. Mit FFmpeg zu MP4 encoden
+Dies ist die zuverlässigste Methode und erzeugt direkt MP4-Dateien.
 
-Minimaler Ablauf:
-1. Starte Frontend lokal
-2. Puppeteer-Skript lädt URL mit Query-Parametern (GPX/Timing)
-3. Trigger `window.startRenderMode()`
-4. 30/60 FPS Frames aufnehmen
-5. `ffmpeg -framerate 30 -i frame-%06d.png -c:v libx264 -pix_fmt yuv420p out.mp4`
+### Schritt-für-Schritt Anleitung
 
-Vorteil:
-- Bleibt nahe an deinem echten MapLibre-Canvas
+1. **Alle Dienste starten**:
+   - **Backend**: Im `backend/`-Verzeichnis:
+     ```bash
+     cd backend
+     .venv\Scripts\activate  # Windows
+     # source .venv/bin/activate  # macOS/Linux
+     uvicorn main:app --reload --host 127.0.0.1 --port 8000
+     ```
+   - **Frontend**: Im `frontend/`-Verzeichnis (in einem separaten Terminal):
+     ```bash
+     cd frontend
+     npx serve . -l 5173
+     ```
 
-Headless-Variante (ohne sichtbare Wiedergabe):
+2. **Render-Abhängigkeiten installieren**:
+   - Im `render/`-Verzeichnis einmalig ausführen:
+     ```bash
+     cd render
+     npm install
+     ```
 
-```bash
-cd render
-npm install
-node render-headless.js --gpx ../sample.gpx --output ../out.mp4 --format portrait --duration 40 --fps 30
-```
+3. **FFmpeg installieren (falls nicht vorhanden)**:
+   - **Windows**: Lade von https://ffmpeg.org/download.html herunter, extrahiere und füge den `bin/`-Ordner zum PATH hinzu, oder nutze Chocolatey: `choco install ffmpeg`
+   - **macOS**: `brew install ffmpeg`
+   - **Linux**: `sudo apt-get install ffmpeg` (Debian/Ubuntu)
 
-Parameter:
-- `--format landscape|portrait` (`landscape` = 16:9, `portrait` = 9:16)
-- `--duration` Animationsdauer in Sekunden
-- `--fps` Ziel-FPS fuer die Ausgabe
-- Optional: `--frontend-url` und `--api-url`
+4. **Render-Prozess starten**:
+   - Im **Projekt-Root-Verzeichnis** (oberhalb von `frontend/`, `backend/`, `render/`) ausführen:
+     ```bash
+     # Beispiel für 16:9 Format:
+     node render/render-headless.js --gpx pfad/zu/deiner.gpx --output mein-video.mp4 --format landscape --duration 40 --fps 30
+     
+     # Beispiel für 9:16 Format (Portrait):
+     node render/render-headless.js --gpx pfad/zu/deiner.gpx --output mein-video-portrait.mp4 --format portrait --duration 40 --fps 30
+     ```
 
-Voraussetzungen:
-- Frontend und Backend muessen laufen (`5173` und `8000`)
-- `ffmpeg` muss im PATH verfuegbar sein
+### Parameter-Übersicht
+
+| Parameter          | Beschreibung                                                                 | Standardwert                  |
+|--------------------|-------------------------------------------------------------------------------|-------------------------------|
+| `--gpx`            | Pfad zur GPX-Datei (erforderlich!)                                           | -                             |
+| `--output`         | Pfad zur Ausgabe-MP4-Datei                                                    | `out.mp4`                     |
+| `--format`         | `landscape` (16:9) oder `portrait` (9:16)                                     | `landscape`                   |
+| `--duration`       | Animationsdauer in Sekunden                                                    | `40`                          |
+| `--fps`            | Frames pro Sekunde für das fertige Video                                      | `30`                          |
+| `--frontend-url`   | URL zum lokalen Frontend (nur ändern, falls du einen anderen Port nutzt)      | `http://127.0.0.1:5173`       |
+| `--api-url`        | URL zum Backend (nur ändern, falls du einen anderen Port nutzt)               | `http://127.0.0.1:8000`       |
+
+### Beispielaufrufe
+
+- **Kurzes Testvideo**: `node render/render-headless.js --gpx test.gpx --output test.mp4 --duration 20`
+- **HQ-Video (60 FPS)**: `node render/render-headless.js --gpx lang.gpx --output hq-video.mp4 --fps 60 --duration 60`
+- **Portrait-Video**: `node render/render-headless.js --gpx social.gpx --output social.mp4 --format portrait`
+
+### Fehlerbehebung beim Rendern
+
+- **"Backend läuft nicht!"**: Überprüfe, ob Backend auf Port 8000 läuft (öffne http://127.0.0.1:8000/health im Browser - sollte `{"status":"ok"}` anzeigen)
+- **"window.gpxOverlay is not available"**: Überprüfe, ob Frontend auf Port 5173 läuft (öffne http://127.0.0.1:5173 im Browser)
+- **"ffmpeg not found"**: Stelle sicher, dass FFmpeg im PATH ist (öffne ein neues Terminal und teste mit `ffmpeg -version`)
 
 Direkt aus der aktuellen App:
 - Die Aufnahme erfolgt im Browser über `MediaRecorder` und wird als `.webm` gespeichert.
