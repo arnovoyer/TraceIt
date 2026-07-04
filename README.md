@@ -131,13 +131,18 @@ Dies ist die zuverlässigste Methode und erzeugt direkt MP4-Dateien.
    - **Linux**: `sudo apt-get install ffmpeg` (Debian/Ubuntu)
 
 4. **Render-Prozess starten**:
-   - Im **Projekt-Root-Verzeichnis** (oberhalb von `frontend/`, `backend/`, `render/`) ausführen:
+   - **Option A: Aus Projekt-Root (empfohlen)** (der Ordner mit `frontend/`, `backend/`, `render/`):
      ```bash
      # Beispiel für 16:9 Format:
      node render/render-headless.js --gpx pfad/zu/deiner.gpx --output mein-video.mp4 --format landscape --duration 40 --fps 30
      
      # Beispiel für 9:16 Format (Portrait):
      node render/render-headless.js --gpx pfad/zu/deiner.gpx --output mein-video-portrait.mp4 --format portrait --duration 40 --fps 30
+     ```
+   - **Option B: Aus render/-Verzeichnis**:
+     ```bash
+     cd render
+     node render-headless.js --gpx ../pfad/zu/deiner.gpx --output ../mein-video.mp4 --format landscape --duration 40 --fps 30
      ```
 
 ### Parameter-Übersicht
