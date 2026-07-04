@@ -1408,38 +1408,45 @@ function sanitizeAndSamplePoints(points) {
   return sampled;
 }
 
-function smoothRoutePoints(points, windowSize = 6) {
+function smoothRoutePoints(points, windowSize = 12) {
   if (points.length < 3) {
     return points;
   }
 
-  const smoothed = [];
-  for (let i = 0; i < points.length; i += 1) {
-    const start = Math.max(0, i - windowSize);
-    const end = Math.min(points.length - 1, i + windowSize);
+  let currentPoints = [...points];
+  
+  // Apply smoothing multiple times for ultra-smooth result
+  for (let pass = 0; pass < 3; pass++) {
+    const smoothed = [];
+    for (let i = 0; i < currentPoints.length; i += 1) {
+      const start = Math.max(0, i - windowSize);
+      const end = Math.min(currentPoints.length - 1, i + windowSize);
 
-    let sumLon = 0;
-    let sumLat = 0;
-    let sumEle = 0;
-    let count = 0;
+      let sumLon = 0;
+      let sumLat = 0;
+      let sumEle = 0;
+      let count = 0;
 
-    for (let j = start; j <= end; j += 1) {
-      sumLon += points[j].lon;
-      sumLat += points[j].lat;
-      sumEle += points[j].ele;
-      count += 1;
+      for (let j = start; j <= end; j += 1) {
+        sumLon += currentPoints[j].lon;
+        sumLat += currentPoints[j].lat;
+        sumEle += currentPoints[j].ele;
+        count += 1;
+      }
+
+      smoothed.push({
+        lon: sumLon / count,
+        lat: sumLat / count,
+        ele: sumEle / count,
+      });
     }
 
-    smoothed.push({
-      lon: sumLon / count,
-      lat: sumLat / count,
-      ele: sumEle / count,
-    });
+    smoothed[0] = currentPoints[0];
+    smoothed[smoothed.length - 1] = currentPoints[currentPoints.length - 1];
+    currentPoints = smoothed;
   }
 
-  smoothed[0] = points[0];
-  smoothed[smoothed.length - 1] = points[points.length - 1];
-  return smoothed;
+  return currentPoints;
 }
 
 function distanceMeters(a, b) {
@@ -1458,7 +1465,7 @@ function distanceMeters(a, b) {
   return 2 * earthRadiusM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-function densifyRoutePoints(points, maxStepMeters = 6) {
+function densifyRoutePoints(points, maxStepMeters = 3) {
   if (points.length < 2) {
     return points;
   }
@@ -1783,8 +1790,8 @@ async function applyParsedGpxData(data) {
   clearPhotoSpots();
 
   const sampledPoints = sanitizeAndSamplePoints(data.points);
-  routePoints = densifyRoutePoints(sampledPoints, 10);
-  cameraPoints = smoothRoutePoints(routePoints, 8);
+  routePoints = densifyRoutePoints(sampledPoints); // Use 3m steps
+  cameraPoints = smoothRoutePoints(routePoints); // Use 3-pass, 12 window smoothing
   routeInsights = computeRouteInsights(sampledPoints);
   if (routeInsights?.fastest) {
     routeInsights.fastestRouteIndex = findNearestPointIndex(routePoints, routeInsights.fastest);
