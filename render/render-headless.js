@@ -47,6 +47,8 @@ async function parseGpxThroughBackend(apiUrl, gpxFilePath) {
   const response = await fetch(`${apiUrl}/api/gpx/parse`, {
     method: "POST",
     body: form,
+    // Disable timeout, or set a very high one
+    signal: AbortSignal.timeout(60000) // 60 seconds
   });
 
   if (!response.ok) {
@@ -110,11 +112,13 @@ async function main() {
 
   const absoluteGpx = path.resolve(args.gpx);
   const absoluteOutput = path.resolve(args.output);
-  const workDir = path.resolve(process.cwd(), "render", "tmp-frames");
+  // Use tmp-frames inside the render directory, no matter where we call from
+  const renderScriptDir = path.dirname(process.argv[1]);
+  const normalizedWorkDir = path.resolve(renderScriptDir, "tmp-frames");
 
-  console.log("Using work directory:", workDir);
-  await ensureDir(workDir);
-  cleanDir(workDir); // Delete old frames before starting
+  console.log("Using work directory:", normalizedWorkDir);
+  await ensureDir(normalizedWorkDir);
+  cleanDir(normalizedWorkDir); // Delete old frames before starting
 
   console.log("[1/5] Parsing GPX via backend ...");
   const parsed = await parseGpxThroughBackend(args.apiUrl, absoluteGpx);
@@ -198,7 +202,7 @@ async function main() {
     // Additional delay to ensure rendering is complete
     await new Promise((resolve) => setTimeout(resolve, 150));
 
-    const framePath = path.join(workDir, `frame-${String(i).padStart(6, "0")}.png`);
+    const framePath = path.join(normalizedWorkDir, `frame-${String(i).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });
     
     if (i % 50 === 0) {
@@ -209,7 +213,7 @@ async function main() {
   await browser.close();
 
   console.log("[5/5] Encoding MP4 with ffmpeg ...");
-  await runFfmpeg(path.join(workDir, "frame-%06d.png"), args.fps, absoluteOutput);
+  await runFfmpeg(path.join(normalizedWorkDir, "frame-%06d.png"), args.fps, absoluteOutput);
 
   console.log(`Done: ${absoluteOutput}`);
 }
