@@ -138,17 +138,24 @@ async def render_gpx(
     output_path = temp_dir / "output.mp4"
     import sys
     render_dir = Path(__file__).parent.parent / "render"
-    npm_cmd = "npm.cmd" if sys.platform == "win32" else "npm"
+    script_path = render_dir / "render-headless.js"
+    node_cmd = "node.exe" if sys.platform == "win32" else "node"
+    
     cmd = [
-        npm_cmd, "run", "render", "--",
+        node_cmd,
+        str(script_path.absolute()),
         "--gpx", str(gpx_path.absolute()),
         "--output", str(output_path.absolute()),
         "--duration", str(duration),
         "--fps", str(fps),
-        "--format", format
+        "--format", format,
+        "--frontend-url", "http://127.0.0.1:5173",
+        "--api-url", "http://127.0.0.1:8000"
     ]
 
-    print(f"Starting render with command: {cmd}")
+    print(f"Starting render with command: {' '.join(cmd)}")
+    print(f"Working directory: {render_dir.absolute()}")
+    
     try:
         result = subprocess.run(
             cmd,
@@ -157,16 +164,22 @@ async def render_gpx(
             capture_output=True,
             text=True
         )
-        print("Render stdout:", result.stdout)
+        print("=== RENDER STDOUT ===")
+        print(result.stdout)
         if result.stderr:
-            print("Render stderr:", result.stderr)
+            print("=== RENDER STDERR ===")
+            print(result.stderr)
+            
     except subprocess.CalledProcessError as e:
-        print(f"Render failed with stdout: {e.stdout}")
-        print(f"Render failed with stderr: {e.stderr}")
-        raise HTTPException(status_code=500, detail=f"Rendering failed: {e.stderr or e.stdout}") from e
+        print(f"=== RENDER FAILED ===")
+        print(f"EXIT CODE: {e.returncode}")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+        full_error = f"Rendering failed!\nCode: {e.returncode}\nStdout: {e.stdout}\nStderr: {e.stderr}"
+        raise HTTPException(status_code=500, detail=full_error) from e
 
     if not output_path.exists():
-        raise HTTPException(status_code=500, detail="Rendering failed: no output file")
+        raise HTTPException(status_code=500, detail="Rendering failed: no output file created!")
 
     return FileResponse(
         path=str(output_path.absolute()),

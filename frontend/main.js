@@ -2085,10 +2085,13 @@ async function recordAnimationAndDownload() {
   isRecording = true;
   playButton.disabled = true;
   recordButton.disabled = true;
+  recordButton.textContent = "Rendert...";
 
   // Hide map and show progress bar
   const mapStage = document.getElementById("mapStage");
   const mapFrame = document.getElementById("mapFrame");
+  
+  let progressInterval = null;
   
   if (mapStage && mapFrame) {
     mapStage.style.display = "none";
@@ -2106,7 +2109,7 @@ async function recordAnimationAndDownload() {
     `;
     
     const progressText = document.createElement("p");
-    progressText.textContent = "Video wird im Hintergrund gerendert...";
+    progressText.textContent = "Video wird im Hintergrund gerendert (das kann ein paar Minuten dauern)...";
     progressText.style.fontSize = "18px";
     progressText.style.color = "#374151";
     
@@ -2125,7 +2128,7 @@ async function recordAnimationAndDownload() {
       width: 0%;
       height: 100%;
       background: linear-gradient(90deg, #FBBF24, #F59E0B);
-      transition: width 0.3s ease;
+      transition: width 0.5s ease;
     `;
     
     const progressPercent = document.createElement("p");
@@ -2140,6 +2143,19 @@ async function recordAnimationAndDownload() {
     progressContainer.appendChild(progressPercent);
     
     mapStage.parentNode.insertBefore(progressContainer, mapStage);
+    
+    // Animate progress fake (since we don't have real-time)
+    let currentProgress = 0;
+    progressInterval = setInterval(() => {
+      // Slowly advance progress, never reaching 100%
+      currentProgress += Math.random() * 3;
+      if (currentProgress > 90) currentProgress = 90;
+      
+      const fill = document.getElementById("progressFill");
+      const percent = document.getElementById("progressPercent");
+      if (fill) fill.style.width = `${currentProgress}%`;
+      if (percent) percent.textContent = `${Math.round(currentProgress)}%`;
+    }, 500);
   }
 
   try {
@@ -2182,6 +2198,12 @@ async function recordAnimationAndDownload() {
       throw new Error(errorText || `Rendern fehlgeschlagen (Status ${response.status})`);
     }
 
+    // Set progress to 100%
+    const fill = document.getElementById("progressFill");
+    const percent = document.getElementById("progressPercent");
+    if (fill) fill.style.width = "100%";
+    if (percent) percent.textContent = "100%";
+    
     // Download the video
     console.log("Downloading rendered video...");
     const blob = await response.blob();
@@ -2200,6 +2222,7 @@ async function recordAnimationAndDownload() {
     setStatus(`Fehler beim Rendern: ${error.message}`);
   } finally {
     // Restore UI
+    if (progressInterval) clearInterval(progressInterval);
     const progressContainer = document.getElementById("renderProgress");
     if (progressContainer) {
       progressContainer.remove();
@@ -2209,6 +2232,7 @@ async function recordAnimationAndDownload() {
     }
     
     isRecording = false;
+    recordButton.textContent = "Animation aufnehmen & herunterladen";
     playButton.disabled = routePoints.length < 2;
     recordButton.disabled = routePoints.length < 2;
   }
