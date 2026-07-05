@@ -119,10 +119,11 @@ Dies ist die zuverlässigste Methode und erzeugt direkt MP4-Dateien.
      ```
 
 2. **Render-Abhängigkeiten installieren**:
-   - Im `render/`-Verzeichnis einmalig ausführen:
+   - Im `render`-Verzeichnis einmalig ausführen:
      ```bash
      cd render
      npm install
+     npx puppeteer browsers install chrome
      ```
 
 3. **FFmpeg installieren (falls nicht vorhanden)**:

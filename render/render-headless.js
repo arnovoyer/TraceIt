@@ -37,26 +37,60 @@ function parseArgs(argv) {
   return args;
 }
 
+function parseGpxDirectly(gpxContent) {
+  // Simple GPX parser for track points
+  const points = [];
+  const trkptRegex = /<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>/g;
+  let match;
+
+  while ((match = trkptRegex.exec(gpxContent)) !== null) {
+    const lat = parseFloat(match[1]);
+    const lon = parseFloat(match[2]);
+    
+    // Try to find elevation too
+    const endOfTrkpt = gpxContent.indexOf("</trkpt>", match.index);
+    const eleMatch = gpxContent.slice(match.index, endOfTrkpt).match(/<ele>([^<]+)<\/ele>/);
+    const ele = eleMatch ? parseFloat(eleMatch[1]) : 0;
+    
+    if (!isNaN(lat) && !isNaN(lon)) {
+      points.push({ lat, lon, ele });
+    }
+  }
+  
+  // If no track points, try route points
+  if (points.length === 0) {
+    const rteptRegex = /<rtept[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>/g;
+    while ((match = rteptRegex.exec(gpxContent)) !== null) {
+      const lat = parseFloat(match[1]);
+      const lon = parseFloat(match[2]);
+      
+      const endOfRtept = gpxContent.indexOf("</rtept>", match.index);
+      const eleMatch = gpxContent.slice(match.index, endOfRtept).match(/<ele>([^<]+)<\/ele>/);
+      const ele = eleMatch ? parseFloat(eleMatch[1]) : 0;
+      
+      if (!isNaN(lat) && !isNaN(lon)) {
+        points.push({ lat, lon, ele });
+      }
+    }
+  }
+  
+  if (points.length < 2) {
+    throw new Error("GPX file contains no valid track or route points");
+  }
+  
+  // Return in same format as backend
+  return {
+    points: points,
+    pointCount: points.length,
+    start: points[0],
+    end: points[points.length - 1]
+  };
+}
+
 async function parseGpxThroughBackend(apiUrl, gpxFilePath) {
   const fileBuffer = await fs.readFile(gpxFilePath);
-  const fileName = path.basename(gpxFilePath);
-
-  const form = new FormData();
-  form.append("file", new Blob([fileBuffer]), fileName);
-
-  const response = await fetch(`${apiUrl}/api/gpx/parse`, {
-    method: "POST",
-    body: form,
-    // Disable timeout, or set a very high one
-    signal: AbortSignal.timeout(60000) // 60 seconds
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GPX parse failed (${response.status}): ${text}`);
-  }
-
-  return response.json();
+  const gpxContent = fileBuffer.toString("utf8");
+  return parseGpxDirectly(gpxContent);
 }
 
 function ensureDir(dirPath) {
@@ -124,7 +158,43 @@ async function main() {
   const parsed = await parseGpxThroughBackend(args.apiUrl, absoluteGpx);
 
   console.log("[2/5] Starting headless browser ...");
-  const browser = await puppeteer.launch({ headless: true });
+  // Try to launch browser with common fallback paths
+  let browser;
+  try {
+    // First try Puppeteer's own Chrome
+    browser = await puppeteer.launch({ headless: true });
+  } catch (err) {
+    console.log("Puppeteer Chrome not found, trying to find system Chrome...");
+    // Try system Chrome paths on different OS
+    let executablePath = null;
+    if (process.platform === "win32") {
+      executablePath = [
+        "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+        `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`
+      ].find(p => fsSync.existsSync(p));
+    } else if (process.platform === "darwin") {
+      executablePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+      if (!fsSync.existsSync(executablePath)) executablePath = null;
+    } else {
+      executablePath = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"]
+        .find(p => {
+          try {
+            fsSync.accessSync(p, fsSync.constants.X_OK);
+            return true;
+          } catch { return false; }
+        });
+    }
+    
+    if (!executablePath) {
+      throw new Error(
+        "Could not find Chrome! Please install Chrome or run: npx puppeteer browsers install chrome"
+      );
+    }
+    
+    browser = await puppeteer.launch({ headless: true, executablePath });
+  }
+  
   const page = await browser.newPage();
 
   const viewport =
