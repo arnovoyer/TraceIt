@@ -220,6 +220,7 @@ async function main() {
 
       await window.gpxOverlay.loadParsedData(parsedData);
       await window.gpxOverlay.prewarmTiles();
+      window.gpxOverlay.enterRenderMode(); // Hide UI!
     },
     { parsedData: parsed, format: args.format, duration: args.duration }
   );

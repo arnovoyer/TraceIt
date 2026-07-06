@@ -6,8 +6,10 @@ node_modules/
 frames/
 .env
 frontend/config.local.js
-android/.gradle/
-android/.idea/
-android/**/build/
-android/local.properties
-android/gradle.local.properties
+render
+.vscode/
+render/tmp-frames/
+mein-video.mp4
+render/node_modules/
+
+

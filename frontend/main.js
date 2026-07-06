@@ -64,16 +64,16 @@ const ALTITUDE_SVG = {
 };
 
 const CAMERA_CONFIG = {
-  pitch: 62, // Less steep
-  zoom: 15.4,
-  sideOffsetM: 38,
-  backOffsetM: 58,
-  centerSmoothing: 0.03, // Ultra smooth drone-like
-  bearingSmoothing: 0.03, // Ultra smooth drone-like
-  lookAheadPoints: 90, // Look even further ahead
-  focusAheadPoints: 40,
-  bearingWindow: 20,
-  maxBearingSpeedDegPerSec: 18, // More controlled turn speed
+  pitch: 60, // Less steep
+  zoom: 15.3,
+  sideOffsetM: 40,
+  backOffsetM: 60,
+  centerSmoothing: 0.015, // Even more ultra smooth drone-like
+  bearingSmoothing: 0.015, // Even more ultra smooth drone-like
+  lookAheadPoints: 120, // Look way further ahead
+  focusAheadPoints: 60,
+  bearingWindow: 30, // Larger window for bearing calculation
+  maxBearingSpeedDegPerSec: 10, // Very slow, controlled turn speed
   outroPitch: 16,
   outroBearing: 0,
   outroPadding: 68,
@@ -81,31 +81,31 @@ const CAMERA_CONFIG = {
 
 const FORMAT_CAMERA_OVERRIDES = {
   landscape: {
-    sideOffsetM: 35,
-    backOffsetM: 55,
-    zoom: 15.4,
-    pitch: 62,
-    lookAheadPoints: 90,
-    focusAheadPoints: 40,
-    bearingSmoothing: 0.03,
-    centerSmoothing: 0.03,
-    maxBearingSpeedDegPerSec: 18,
+    sideOffsetM: 38,
+    backOffsetM: 58,
+    zoom: 15.3,
+    pitch: 60,
+    lookAheadPoints: 120,
+    focusAheadPoints: 60,
+    bearingSmoothing: 0.015,
+    centerSmoothing: 0.015,
+    maxBearingSpeedDegPerSec: 10,
     headAnchorX: 0.5,
     headAnchorY: 0.62, // Higher
     outroPitch: 16,
     outroPadding: 68,
   },
   portrait: {
-    sideOffsetM: 30,
-    backOffsetM: 60,
-    zoom: 15.2,
-    pitch: 61,
-    lookAheadPoints: 95,
-    focusAheadPoints: 42,
-    bearingWindow: 20,
-    maxBearingSpeedDegPerSec: 16,
-    bearingSmoothing: 0.03,
-    centerSmoothing: 0.03,
+    sideOffsetM: 32,
+    backOffsetM: 62,
+    zoom: 15.1,
+    pitch: 59,
+    lookAheadPoints: 125,
+    focusAheadPoints: 62,
+    bearingWindow: 30,
+    maxBearingSpeedDegPerSec: 9,
+    bearingSmoothing: 0.015,
+    centerSmoothing: 0.015,
     headAnchorX: 0.5,
     headAnchorY: 0.63, // Higher up, not too low
     viewportMarginX: 0.08,
@@ -2071,6 +2071,18 @@ function getCurrentFormatLabel() {
 function toTimestamp() {
   return new Date().toISOString().replace(/[.:]/g, "-");
 }
+
+let isRenderMode = false;
+window.gpxOverlay.enterRenderMode = function() {
+  isRenderMode = true;
+  // Hide all UI elements
+  document.body.classList.add("render-mode");
+};
+window.gpxOverlay.leaveRenderMode = function() {
+  isRenderMode = false;
+  // Show all UI elements again
+  document.body.classList.remove("render-mode");
+};
 
 async function recordAnimationAndDownload() {
   if (isRecording) {

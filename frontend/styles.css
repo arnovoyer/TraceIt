@@ -442,3 +442,38 @@ input[type="number"]::selection {
     width: min(88%, 340px);
   }
 }
+
+/* Render Mode Styles - Hide all UI for video export */
+body.render-mode .toolbar,
+body.render-mode .status-row,
+body.render-mode .insight-panel,
+body.render-mode .altitude-overlay {
+  display: none !important;
+}
+
+body.render-mode #mapStage {
+  padding: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body.render-mode #mapFrame {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+body.render-mode .app-shell {
+  padding: 0;
+  margin: 0;
+  height: 100vh;
+  grid-template-rows: 1fr;
+}
