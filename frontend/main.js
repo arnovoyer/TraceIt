@@ -2146,16 +2146,34 @@ async function recordAnimationAndDownload() {
     
     // Animate progress fake (since we don't have real-time)
     let currentProgress = 0;
+    const statusTexts = [
+      "Video wird im Hintergrund gerendert...",
+      "Frames werden erfasst...",
+      "Fast fertig! Bitte warten...",
+      "Video wird kodiert...",
+      "Noch ein bisschen..."
+    ];
+    let statusTextIndex = 0;
+    
     progressInterval = setInterval(() => {
-      // Slowly advance progress, never reaching 100%
-      currentProgress += Math.random() * 3;
-      if (currentProgress > 90) currentProgress = 90;
+      // Slowly advance up to 99%, then stay there
+      if (currentProgress < 99) {
+        currentProgress += Math.random() * 0.5;
+        if (currentProgress > 99) currentProgress = 99;
+      }
+      
+      // Cycle through status texts
+      if (Math.random() > 0.95) { // ~5% chance each tick
+        statusTextIndex = (statusTextIndex + 1) % statusTexts.length;
+        const statusEl = document.querySelector("#renderProgress p:first-child");
+        if (statusEl) statusEl.textContent = statusTexts[statusTextIndex];
+      }
       
       const fill = document.getElementById("progressFill");
       const percent = document.getElementById("progressPercent");
       if (fill) fill.style.width = `${currentProgress}%`;
       if (percent) percent.textContent = `${Math.round(currentProgress)}%`;
-    }, 500);
+    }, 300);
   }
 
   try {
