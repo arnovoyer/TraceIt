@@ -228,54 +228,32 @@ async function main() {
   const totalSeconds = args.duration + Math.max(2, Math.round(args.duration * 0.18));
   const totalFrames = Math.ceil(totalSeconds * args.fps);
 
+  console.log(`Total frames to capture: ${totalFrames}`);
+
   // Capture frames by controlling animation progress directly
   // This eliminates PC performance dependency and ensures all frames are loaded
   for (let i = 0; i < totalFrames; i += 1) {
     const progress = i / totalFrames;
     
     // Set animation to specific progress without playing
-    await page.evaluate((prog) => {
-      if (!window.gpxOverlay || !window.gpxOverlay.setProgress) {
-        throw new Error("setProgress not available on gpxOverlay");
-      }
-      window.gpxOverlay.setProgress(prog);
-    }, progress);
-
-    // Wait for map to be idle and style loaded
-    await page.waitForFunction(() => {
-      return window.map && window.map.isStyleLoaded() && !window.map.isMoving();
-    }, { timeout: 10000 });
-
-    // Wait for all tiles to be loaded in the current viewport
-    await page.evaluate(() => {
-      return new Promise((resolve) => {
-        if (!window.map) {
-          resolve();
-          return;
+    try {
+      await page.evaluate((prog) => {
+        if (!window.gpxOverlay || !window.gpxOverlay.setProgress) {
+          throw new Error("setProgress not available on gpxOverlay");
         }
-        
-        const checkTiles = () => {
-          const tilesLoading = window.map.areTilesLoaded ? window.map.areTilesLoaded() : false;
-          if (tilesLoading) {
-            resolve();
-          } else {
-            setTimeout(checkTiles, 50);
-          }
-        };
-        
-        // Give it some time to load tiles, but don't wait forever
-        setTimeout(() => resolve(), 300);
-        checkTiles();
-      });
-    });
+        window.gpxOverlay.setProgress(prog);
+      }, progress);
+    } catch (err) {
+      console.warn(`Warning setting progress for frame ${i}:`, err.message);
+    }
 
-    // Additional delay to ensure rendering is complete
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Simple fixed wait instead of complicated conditions
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
     const framePath = path.join(normalizedWorkDir, `frame-${String(i).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });
     
-    if (i % 50 === 0) {
+    if (i % 25 === 0) {
       console.log(`  Captured frame ${i + 1}/${totalFrames}`);
     }
   }
