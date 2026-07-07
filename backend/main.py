@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 import subprocess
 import tempfile
+import threading
 import uuid
 from fastapi.responses import FileResponse
 
@@ -23,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+render_jobs: dict[str, dict[str, Any]] = {}
 
 
 def _isoformat_or_none(value: datetime | None) -> str | None:
@@ -111,6 +114,69 @@ async def parse_gpx(file: UploadFile = File(...)) -> dict[str, Any]:
     }
 
 
+def _start_render_job(
+    job_id: str,
+    temp_dir: Path,
+    gpx_path: Path,
+    output_path: Path,
+    duration: int,
+    format: str,
+    fps: int,
+) -> None:
+    job = render_jobs[job_id]
+    job["status"] = "running"
+
+    import sys
+
+    render_dir = Path(__file__).parent.parent / "render"
+    script_path = render_dir / "render-headless.js"
+    node_cmd = "node.exe" if sys.platform == "win32" else "node"
+
+    cmd = [
+        node_cmd,
+        str(script_path.absolute()),
+        "--gpx", str(gpx_path.absolute()),
+        "--output", str(output_path.absolute()),
+        "--duration", str(duration),
+        "--fps", str(fps),
+        "--format", format,
+        "--frontend-url", "http://127.0.0.1:5173",
+        "--api-url", "http://127.0.0.1:8000",
+    ]
+
+    print(f"Starting render job {job_id}: {' '.join(cmd)}")
+    print(f"Working directory: {render_dir.absolute()}")
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(render_dir.absolute()),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        job["status"] = "done"
+        job["stdout"] = result.stdout
+        job["stderr"] = result.stderr
+        job["output_path"] = str(output_path.absolute())
+    except subprocess.CalledProcessError as e:
+        print(f"=== RENDER FAILED ({job_id}) ===")
+        print(f"EXIT CODE: {e.returncode}")
+        print(f"STDOUT: {e.stdout}")
+        print(f"STDERR: {e.stderr}")
+        job["status"] = "error"
+        job["stdout"] = e.stdout
+        job["stderr"] = e.stderr
+        job["error"] = (
+            f"Rendering failed!\nCode: {e.returncode}\nStdout: {e.stdout}\nStderr: {e.stderr}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        job["status"] = "error"
+        job["error"] = str(exc)
+    finally:
+        job["updated_at"] = datetime.now().isoformat()
+
+
 @app.post("/api/gpx/render")
 async def render_gpx(
     file: UploadFile = File(...),
@@ -134,55 +200,59 @@ async def render_gpx(
     gpx_path = temp_dir / "input.gpx"
     gpx_path.write_bytes(raw)
 
-    # Run the headless renderer
     output_path = temp_dir / "output.mp4"
-    import sys
-    render_dir = Path(__file__).parent.parent / "render"
-    script_path = render_dir / "render-headless.js"
-    node_cmd = "node.exe" if sys.platform == "win32" else "node"
-    
-    cmd = [
-        node_cmd,
-        str(script_path.absolute()),
-        "--gpx", str(gpx_path.absolute()),
-        "--output", str(output_path.absolute()),
-        "--duration", str(duration),
-        "--fps", str(fps),
-        "--format", format,
-        "--frontend-url", "http://127.0.0.1:5173",
-        "--api-url", "http://127.0.0.1:8000"
-    ]
 
-    print(f"Starting render with command: {' '.join(cmd)}")
-    print(f"Working directory: {render_dir.absolute()}")
-    
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=str(render_dir.absolute()),
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        print("=== RENDER STDOUT ===")
-        print(result.stdout)
-        if result.stderr:
-            print("=== RENDER STDERR ===")
-            print(result.stderr)
-            
-    except subprocess.CalledProcessError as e:
-        print(f"=== RENDER FAILED ===")
-        print(f"EXIT CODE: {e.returncode}")
-        print(f"STDOUT: {e.stdout}")
-        print(f"STDERR: {e.stderr}")
-        full_error = f"Rendering failed!\nCode: {e.returncode}\nStdout: {e.stdout}\nStderr: {e.stderr}"
-        raise HTTPException(status_code=500, detail=full_error) from e
+    render_jobs[job_id] = {
+        "job_id": job_id,
+        "status": "queued",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+        "temp_dir": str(temp_dir.absolute()),
+        "output_path": str(output_path.absolute()),
+        "stdout": "",
+        "stderr": "",
+        "error": None,
+    }
 
+    thread = threading.Thread(
+        target=_start_render_job,
+        args=(job_id, temp_dir, gpx_path, output_path, duration, format, fps),
+        daemon=True,
+    )
+    thread.start()
+
+    return {"jobId": job_id, "status": "queued"}
+
+
+@app.get("/api/gpx/render/{job_id}")
+def get_render_job(job_id: str) -> dict[str, Any]:
+    job = render_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Render job not found.")
+
+    return {
+        "jobId": job["job_id"],
+        "status": job["status"],
+        "createdAt": job["created_at"],
+        "updatedAt": job["updated_at"],
+        "error": job["error"],
+    }
+
+
+@app.get("/api/gpx/render/{job_id}/download")
+def download_render_job(job_id: str) -> FileResponse:
+    job = render_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Render job not found.")
+    if job["status"] != "done":
+        raise HTTPException(status_code=409, detail="Render job is not finished yet.")
+
+    output_path = Path(job["output_path"])
     if not output_path.exists():
-        raise HTTPException(status_code=500, detail="Rendering failed: no output file created!")
+        raise HTTPException(status_code=500, detail="Rendered video file is missing.")
 
     return FileResponse(
         path=str(output_path.absolute()),
         media_type="video/mp4",
-        filename=f"gpx-video-{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
+        filename=f"gpx-video-{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4",
     )

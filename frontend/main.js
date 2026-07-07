@@ -33,6 +33,7 @@ let routePoints = [];
 let cameraPoints = [];
 let animationFrameId = null;
 let isRecording = false;
+let uploadedGpxFile = null;
 let altitudeOverlayState = null;
 let routeInsights = null;
 let highlightMarkers = [];
@@ -2072,6 +2073,10 @@ function toTimestamp() {
   return new Date().toISOString().replace(/[.:]/g, "-");
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function enterRenderMode() {
   document.body.classList.add("render-mode");
 }
@@ -2191,8 +2196,8 @@ async function recordAnimationAndDownload() {
 
     setStatus("Video wird im Hintergrund gerendert...");
     
-    // Get the original GPX file from the input element
-    const gpxFile = gpxInput.files?.[0];
+    // Keep the uploaded GPX in memory so a failed render does not lose it.
+    const gpxFile = uploadedGpxFile || gpxInput.files?.[0];
     if (!gpxFile) {
       throw new Error("Keine GPX-Datei gefunden. Bitte erneut hochladen.");
     }
@@ -2210,7 +2215,7 @@ async function recordAnimationAndDownload() {
     const formData = new FormData();
     formData.append("file", gpxFile);
 
-    console.log("Sending request to render endpoint...");
+    console.log("Starting render job...");
     const response = await fetch(
       `${API_BASE_URL}/api/gpx/render?duration=${encodeURIComponent(durationSeconds)}&format=${encodeURIComponent(formatKey)}&fps=${encodeURIComponent(fps)}`,
       { method: "POST", body: formData }
@@ -2224,15 +2229,64 @@ async function recordAnimationAndDownload() {
       throw new Error(errorText || `Rendern fehlgeschlagen (Status ${response.status})`);
     }
 
+    const jobData = await response.json();
+    const jobId = jobData?.jobId;
+    if (!jobId) {
+      throw new Error("Backend hat keine Render-Job-ID zurueckgegeben.");
+    }
+
+    setStatus("Render-Job gestartet. Warte auf Fertigstellung...");
+
+    let attempts = 0;
+    while (true) {
+      attempts += 1;
+      await delay(1500);
+
+      const statusResponse = await fetch(
+        `${API_BASE_URL}/api/gpx/render/${encodeURIComponent(jobId)}`
+      );
+      if (!statusResponse.ok) {
+        throw new Error(
+          `Render-Status konnte nicht abgefragt werden (Status ${statusResponse.status}).`
+        );
+      }
+
+      const job = await statusResponse.json();
+      if (job.status === "done") {
+        break;
+      }
+      if (job.status === "error") {
+        throw new Error(job.error || "Render-Job ist fehlgeschlagen.");
+      }
+
+      const runningFill = document.getElementById("progressFill");
+      const runningPercent = document.getElementById("progressPercent");
+      const uiProgress = Math.min(99, 8 + attempts * 2);
+      if (runningFill) runningFill.style.width = `${uiProgress}%`;
+      if (runningPercent) runningPercent.textContent = `${uiProgress}%`;
+      setStatus(`Render-Job laeuft im Hintergrund (${job.status})...`);
+    }
+
     // Set progress to 100%
     const fill = document.getElementById("progressFill");
     const percent = document.getElementById("progressPercent");
     if (fill) fill.style.width = "100%";
     if (percent) percent.textContent = "100%";
     
-    // Download the video
+    // Download the video after the background render is finished.
     console.log("Downloading rendered video...");
-    const blob = await response.blob();
+    const downloadResponse = await fetch(
+      `${API_BASE_URL}/api/gpx/render/${encodeURIComponent(jobId)}/download`
+    );
+    if (!downloadResponse.ok) {
+      let errorText = "";
+      try {
+        errorText = await downloadResponse.text();
+      } catch {}
+      throw new Error(errorText || `Download fehlgeschlagen (Status ${downloadResponse.status})`);
+    }
+
+    const blob = await downloadResponse.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = blobUrl;
@@ -2293,6 +2347,8 @@ gpxInput.addEventListener("change", async (event) => {
   if (!file) {
     return;
   }
+
+  uploadedGpxFile = file;
 
   try {
     setStatus("GPX wird verarbeitet ...");
