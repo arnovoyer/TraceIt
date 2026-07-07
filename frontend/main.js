@@ -2072,17 +2072,13 @@ function toTimestamp() {
   return new Date().toISOString().replace(/[.:]/g, "-");
 }
 
-let isRenderMode = false;
-window.gpxOverlay.enterRenderMode = function() {
-  isRenderMode = true;
-  // Hide all UI elements
+function enterRenderMode() {
   document.body.classList.add("render-mode");
-};
-window.gpxOverlay.leaveRenderMode = function() {
-  isRenderMode = false;
-  // Show all UI elements again
+}
+
+function leaveRenderMode() {
   document.body.classList.remove("render-mode");
-};
+}
 
 async function recordAnimationAndDownload() {
   if (isRecording) {
@@ -2469,6 +2465,8 @@ window.gpxOverlay = {
     return startAnimation();
   },
   setProgress: setProgress,
+  enterRenderMode,
+  leaveRenderMode,
 };
 
 playButton.addEventListener("click", () => {
