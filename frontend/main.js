@@ -248,6 +248,7 @@ map.on("load", async () => {
 
   await ensureMarkerImages();
   ensureMarkerLayers();
+  syncRouteLineAppearance();
   syncMarkerLayers();
 });
 
@@ -1715,6 +1716,7 @@ function clearExistingRoute() {
 function drawRouteLine() {
   clearExistingRoute();
   ensureMarkerLayers();
+  syncRouteLineAppearance();
 
   const initialCoords = routePoints.length > 0 ? [[routePoints[0].lon, routePoints[0].lat]] : [];
   const routeSource = map.getSource("route");
