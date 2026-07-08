@@ -34,6 +34,7 @@ let cameraPoints = [];
 let animationFrameId = null;
 let isRecording = false;
 let uploadedGpxFile = null;
+let isRenderMode = false;
 let altitudeOverlayState = null;
 let routeInsights = null;
 let highlightMarkers = [];
@@ -41,6 +42,11 @@ let photoSpots = [];
 let photoMarkers = [];
 let pendingPhotoFile = null;
 let routeIconLayerReady = false;
+let renderCameraState = {
+  lastProgress: null,
+  smoothedBearing: null,
+  smoothedCenter: null,
+};
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
@@ -164,6 +170,56 @@ function getSelectedFormatKey() {
 function getActiveCameraConfig() {
   const formatKey = getSelectedFormatKey();
   return { ...CAMERA_CONFIG, ...(FORMAT_CAMERA_OVERRIDES[formatKey] || {}) };
+}
+
+function getRouteLineWidthExpression(stops, scale = 1) {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    stops[0], stops[1] * scale,
+    stops[2], stops[3] * scale,
+    stops[4], stops[5] * scale,
+    stops[6], stops[7] * scale,
+  ];
+}
+
+function syncRouteLineAppearance() {
+  const mainScale = isRenderMode ? 1.18 : 1;
+  const glowScale = isRenderMode ? 1.12 : 1;
+  const edgeScale = isRenderMode ? 1.15 : 1;
+
+  if (map.getLayer("route-line-glow")) {
+    map.setPaintProperty(
+      "route-line-glow",
+      "line-width",
+      getRouteLineWidthExpression([12, 6, 14, 10, 16, 16, 18, 22], glowScale)
+    );
+  }
+
+  if (map.getLayer("route-line")) {
+    map.setPaintProperty(
+      "route-line",
+      "line-width",
+      getRouteLineWidthExpression([12, 2.5, 14, 4, 16, 6, 18, 8.5], mainScale)
+    );
+  }
+
+  if (map.getLayer("route-line-edge")) {
+    map.setPaintProperty(
+      "route-line-edge",
+      "line-width",
+      getRouteLineWidthExpression([12, 0.8, 14, 1.2, 16, 1.8, 18, 2.5], edgeScale)
+    );
+  }
+}
+
+function resetRenderCameraState() {
+  renderCameraState = {
+    lastProgress: null,
+    smoothedBearing: null,
+    smoothedCenter: null,
+  };
 }
 
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -397,15 +453,7 @@ function ensureMarkerLayers() {
         "line-color": "#FBC02D",
         "line-opacity": 0.2,
         "line-blur": 8,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 6,
-          14, 10,
-          16, 16,
-          18, 22,
-        ],
+        "line-width": getRouteLineWidthExpression([12, 6, 14, 10, 16, 16, 18, 22]),
       },
     });
   }
@@ -422,15 +470,7 @@ function ensureMarkerLayers() {
       paint: {
         "line-color": "#FFD600",
         "line-opacity": 0.95,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 2.5,
-          14, 4,
-          16, 6,
-          18, 8.5,
-        ],
+        "line-width": getRouteLineWidthExpression([12, 2.5, 14, 4, 16, 6, 18, 8.5]),
       },
     });
   }
@@ -447,15 +487,7 @@ function ensureMarkerLayers() {
       paint: {
         "line-color": "#FFFFFF",
         "line-opacity": 0.8,
-        "line-width": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          12, 0.8,
-          14, 1.2,
-          16, 1.8,
-          18, 2.5,
-        ],
+        "line-width": getRouteLineWidthExpression([12, 0.8, 14, 1.2, 16, 1.8, 18, 2.5]),
       },
     });
   }
