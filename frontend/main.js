@@ -2110,11 +2110,17 @@ function delay(ms) {
 }
 
 function enterRenderMode() {
+  isRenderMode = true;
+  resetRenderCameraState();
   document.body.classList.add("render-mode");
+  syncRouteLineAppearance();
 }
 
 function leaveRenderMode() {
+  isRenderMode = false;
+  resetRenderCameraState();
   document.body.classList.remove("render-mode");
+  syncRouteLineAppearance();
 }
 
 async function recordAnimationAndDownload() {
