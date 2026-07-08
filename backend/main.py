@@ -4,6 +4,7 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Any
+import re
 import subprocess
 import tempfile
 import threading
@@ -26,6 +27,73 @@ app.add_middleware(
 )
 
 render_jobs: dict[str, dict[str, Any]] = {}
+
+
+def _update_render_job_progress(job: dict[str, Any], line: str) -> None:
+    text = line.strip()
+    if not text:
+        return
+
+    job["last_log_line"] = text
+    recent_logs = job.setdefault("recent_logs", [])
+    recent_logs.append(text)
+    if len(recent_logs) > 20:
+        del recent_logs[:-20]
+
+    if text.startswith("[1/5]"):
+        job["stage"] = "parsing"
+        job["message"] = "GPX wird verarbeitet..."
+        job["progress"] = max(job.get("progress", 0), 5)
+        return
+
+    if text.startswith("[2/5]"):
+        job["stage"] = "browser"
+        job["message"] = "Headless Browser wird gestartet..."
+        job["progress"] = max(job.get("progress", 0), 10)
+        return
+
+    if text.startswith("[3/5]"):
+        job["stage"] = "prewarming"
+        job["message"] = "Route wird geladen und Tiles werden vorbereitet..."
+        job["progress"] = max(job.get("progress", 0), 18)
+        return
+
+    if text.startswith("[4/5]"):
+        job["stage"] = "capturing"
+        job["message"] = "Frames werden gerendert..."
+        job["progress"] = max(job.get("progress", 0), 25)
+        return
+
+    if text.startswith("[5/5]"):
+        job["stage"] = "encoding"
+        job["message"] = "Video wird kodiert..."
+        job["progress"] = max(job.get("progress", 0), 96)
+        return
+
+    total_match = re.search(r"Total frames to capture:\s*(\d+)", text)
+    if total_match:
+        total_frames = int(total_match.group(1))
+        job["total_frames"] = total_frames
+        job["message"] = f"0 von {total_frames} Frames gerendert"
+        job["progress"] = max(job.get("progress", 0), 25)
+        return
+
+    frame_match = re.search(r"Captured frame\s+(\d+)\/(\d+)", text)
+    if frame_match:
+        current_frame = int(frame_match.group(1))
+        total_frames = int(frame_match.group(2))
+        job["stage"] = "capturing"
+        job["current_frame"] = current_frame
+        job["total_frames"] = total_frames
+        capture_progress = 25 + round((current_frame / max(total_frames, 1)) * 68)
+        job["progress"] = max(job.get("progress", 0), min(capture_progress, 93))
+        job["message"] = f"{current_frame} von {total_frames} Frames gerendert"
+        return
+
+    if text.startswith("Done:"):
+        job["stage"] = "done"
+        job["message"] = "Rendern abgeschlossen"
+        job["progress"] = 100
 
 
 def _isoformat_or_none(value: datetime | None) -> str | None:
@@ -148,31 +216,46 @@ def _start_render_job(
     print(f"Working directory: {render_dir.absolute()}")
 
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             cmd,
             cwd=str(render_dir.absolute()),
-            check=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,
         )
-        job["status"] = "done"
-        job["stdout"] = result.stdout
-        job["stderr"] = result.stderr
-        job["output_path"] = str(output_path.absolute())
-    except subprocess.CalledProcessError as e:
-        print(f"=== RENDER FAILED ({job_id}) ===")
-        print(f"EXIT CODE: {e.returncode}")
-        print(f"STDOUT: {e.stdout}")
-        print(f"STDERR: {e.stderr}")
-        job["status"] = "error"
-        job["stdout"] = e.stdout
-        job["stderr"] = e.stderr
-        job["error"] = (
-            f"Rendering failed!\nCode: {e.returncode}\nStdout: {e.stdout}\nStderr: {e.stderr}"
-        )
+        output_lines: list[str] = []
+
+        assert process.stdout is not None
+        for line in process.stdout:
+            output_lines.append(line)
+            print(line, end="")
+            _update_render_job_progress(job, line)
+            job["updated_at"] = datetime.now().isoformat()
+
+        return_code = process.wait()
+        combined_output = "".join(output_lines)
+        job["stdout"] = combined_output
+        job["stderr"] = ""
+
+        if return_code != 0:
+            print(f"=== RENDER FAILED ({job_id}) ===")
+            print(f"EXIT CODE: {return_code}")
+            job["status"] = "error"
+            job["error"] = f"Rendering failed!\nCode: {return_code}\nOutput: {combined_output}"
+        else:
+            job["status"] = "done"
+            job["output_path"] = str(output_path.absolute())
+            job["stage"] = "done"
+            job["message"] = "Rendern abgeschlossen"
+            job["progress"] = 100
     except Exception as exc:  # noqa: BLE001
+        print(f"=== RENDER FAILED ({job_id}) ===")
+        print(str(exc))
         job["status"] = "error"
         job["error"] = str(exc)
+        job["message"] = "Rendern fehlgeschlagen"
+        job["stderr"] = str(exc)
     finally:
         job["updated_at"] = datetime.now().isoformat()
 
@@ -205,6 +288,13 @@ async def render_gpx(
     render_jobs[job_id] = {
         "job_id": job_id,
         "status": "queued",
+        "stage": "queued",
+        "progress": 0,
+        "message": "Render-Job ist in der Warteschlange...",
+        "current_frame": 0,
+        "total_frames": None,
+        "last_log_line": "",
+        "recent_logs": [],
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
         "temp_dir": str(temp_dir.absolute()),
@@ -233,6 +323,12 @@ def get_render_job(job_id: str) -> dict[str, Any]:
     return {
         "jobId": job["job_id"],
         "status": job["status"],
+        "stage": job["stage"],
+        "progress": job["progress"],
+        "message": job["message"],
+        "currentFrame": job["current_frame"],
+        "totalFrames": job["total_frames"],
+        "lastLogLine": job["last_log_line"],
         "createdAt": job["created_at"],
         "updatedAt": job["updated_at"],
         "error": job["error"],

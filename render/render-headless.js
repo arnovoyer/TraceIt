@@ -254,7 +254,7 @@ async function main() {
     const framePath = path.join(normalizedWorkDir, `frame-${String(i).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });
     
-    if (i % 25 === 0) {
+    if (i % 10 === 0 || i === totalFrames - 1) {
       console.log(`  Captured frame ${i + 1}/${totalFrames}`);
     }
   }

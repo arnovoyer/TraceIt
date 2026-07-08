@@ -2122,6 +2122,7 @@ async function recordAnimationAndDownload() {
     `;
     
     const progressText = document.createElement("p");
+    progressText.id = "renderProgressText";
     progressText.textContent = "Video wird im Hintergrund gerendert (das kann ein paar Minuten dauern)...";
     progressText.style.fontSize = "18px";
     progressText.style.color = "#374151";
@@ -2149,44 +2150,20 @@ async function recordAnimationAndDownload() {
     progressPercent.textContent = "0%";
     progressPercent.style.fontSize = "16px";
     progressPercent.style.color = "#6b7280";
+
+    const progressDetail = document.createElement("p");
+    progressDetail.id = "renderProgressDetail";
+    progressDetail.textContent = "Warte auf Render-Start...";
+    progressDetail.style.fontSize = "15px";
+    progressDetail.style.color = "#4b5563";
     
     progressBar.appendChild(progressFill);
     progressContainer.appendChild(progressText);
     progressContainer.appendChild(progressBar);
     progressContainer.appendChild(progressPercent);
+    progressContainer.appendChild(progressDetail);
     
     mapStage.parentNode.insertBefore(progressContainer, mapStage);
-    
-    // Animate progress fake (since we don't have real-time)
-    let currentProgress = 0;
-    const statusTexts = [
-      "Video wird im Hintergrund gerendert...",
-      "Frames werden erfasst...",
-      "Fast fertig! Bitte warten...",
-      "Video wird kodiert...",
-      "Noch ein bisschen..."
-    ];
-    let statusTextIndex = 0;
-    
-    progressInterval = setInterval(() => {
-      // Slowly advance up to 99%, then stay there
-      if (currentProgress < 99) {
-        currentProgress += Math.random() * 0.5;
-        if (currentProgress > 99) currentProgress = 99;
-      }
-      
-      // Cycle through status texts
-      if (Math.random() > 0.95) { // ~5% chance each tick
-        statusTextIndex = (statusTextIndex + 1) % statusTexts.length;
-        const statusEl = document.querySelector("#renderProgress p:first-child");
-        if (statusEl) statusEl.textContent = statusTexts[statusTextIndex];
-      }
-      
-      const fill = document.getElementById("progressFill");
-      const percent = document.getElementById("progressPercent");
-      if (fill) fill.style.width = `${currentProgress}%`;
-      if (percent) percent.textContent = `${Math.round(currentProgress)}%`;
-    }, 300);
   }
 
   try {
@@ -2237,10 +2214,8 @@ async function recordAnimationAndDownload() {
 
     setStatus("Render-Job gestartet. Warte auf Fertigstellung...");
 
-    let attempts = 0;
     while (true) {
-      attempts += 1;
-      await delay(1500);
+      await delay(1000);
 
       const statusResponse = await fetch(
         `${API_BASE_URL}/api/gpx/render/${encodeURIComponent(jobId)}`
@@ -2261,10 +2236,24 @@ async function recordAnimationAndDownload() {
 
       const runningFill = document.getElementById("progressFill");
       const runningPercent = document.getElementById("progressPercent");
-      const uiProgress = Math.min(99, 8 + attempts * 2);
-      if (runningFill) runningFill.style.width = `${uiProgress}%`;
-      if (runningPercent) runningPercent.textContent = `${uiProgress}%`;
-      setStatus(`Render-Job laeuft im Hintergrund (${job.status})...`);
+      const runningText = document.getElementById("renderProgressText");
+      const runningDetail = document.getElementById("renderProgressDetail");
+      const progressValue = Math.max(0, Math.min(100, Number(job.progress ?? 0)));
+      if (runningFill) runningFill.style.width = `${progressValue}%`;
+      if (runningPercent) runningPercent.textContent = `${Math.round(progressValue)}%`;
+      if (runningText) runningText.textContent = job.message || "Render-Job laeuft...";
+
+      if (runningDetail) {
+        if (Number.isFinite(job.currentFrame) && Number.isFinite(job.totalFrames) && job.totalFrames > 0) {
+          runningDetail.textContent = `${job.currentFrame} von ${job.totalFrames} Frames gerendert`;
+        } else if (job.lastLogLine) {
+          runningDetail.textContent = job.lastLogLine;
+        } else {
+          runningDetail.textContent = `Status: ${job.status}`;
+        }
+      }
+
+      setStatus(job.message || `Render-Job laeuft im Hintergrund (${job.status})...`);
     }
 
     // Set progress to 100%
