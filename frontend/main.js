@@ -2447,6 +2447,14 @@ function setProgress(progress) {
   const segmentCount = activePoints.length - 1;
 
   const clampedProgress = Math.min(1, Math.max(0, progress));
+  const shouldResetSmoothing =
+    renderCameraState.lastProgress === null ||
+    clampedProgress < renderCameraState.lastProgress ||
+    clampedProgress - renderCameraState.lastProgress > 0.1;
+  if (shouldResetSmoothing) {
+    resetRenderCameraState();
+  }
+
   const scaled = clampedProgress * segmentCount;
   const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
   const localT = scaled - segmentIndex;
@@ -2494,18 +2502,48 @@ function setProgress(progress) {
   );
   const rawBearing = getStableBearing(activePoints, lookAheadIndex);
 
+  const progressDelta =
+    renderCameraState.lastProgress === null ? 0 : Math.max(0, clampedProgress - renderCameraState.lastProgress);
+  const dtMs = Math.max(16, progressDelta * durationMs);
+  let smoothedBearing = renderCameraState.smoothedBearing;
+
+  if (smoothedBearing === null || !Number.isFinite(smoothedBearing)) {
+    smoothedBearing = rawBearing;
+  } else {
+    const delta = shortestAngleDelta(smoothedBearing, rawBearing);
+    const smoothedDelta = delta * cfg.bearingSmoothing;
+    const maxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
+    const limitedDelta = Math.max(-maxStep, Math.min(maxStep, smoothedDelta));
+    smoothedBearing += limitedDelta;
+    smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
+  }
+
+  if (!Number.isFinite(smoothedBearing)) {
+    smoothedBearing = rawBearing || 0;
+  }
+
   const focusIndex = Math.min(
     activePoints.length - 1,
     segmentIndex + dynamicFocusAhead
   );
   const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
   const offsetCenter = keepRouteHeadInViewport(
-    addHelicopterOffset(focusPoint, rawBearing),
+    addHelicopterOffset(focusPoint, smoothedBearing),
     smoothRoute,
-    rawBearing,
+    smoothedBearing,
     cfg.pitch,
     cfg.zoom
   );
+
+  let smoothedCenter = renderCameraState.smoothedCenter;
+  if (!smoothedCenter) {
+    smoothedCenter = offsetCenter;
+  } else {
+    smoothedCenter = {
+      lon: lerp(smoothedCenter.lon, offsetCenter.lon, cfg.centerSmoothing),
+      lat: lerp(smoothedCenter.lat, offsetCenter.lat, cfg.centerSmoothing),
+    };
+  }
 
   // Update trail
   const trailCoords = [];
@@ -2519,12 +2557,16 @@ function setProgress(progress) {
   }
 
   map.jumpTo({
-    center: [offsetCenter.lon, offsetCenter.lat],
-    bearing: rawBearing,
+    center: [smoothedCenter.lon, smoothedCenter.lat],
+    bearing: smoothedBearing,
     pitch: cfg.pitch,
     zoom: cfg.zoom,
     duration: 0,
   });
+
+  renderCameraState.lastProgress = clampedProgress;
+  renderCameraState.smoothedBearing = smoothedBearing;
+  renderCameraState.smoothedCenter = smoothedCenter;
 
   return true;
 }
