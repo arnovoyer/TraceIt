@@ -47,6 +47,8 @@ let renderCameraState = {
   smoothedBearing: null,
   smoothedCenter: null,
 };
+let previewCanvasSize = { width: null, height: null };
+let renderZoomOffset = 0;
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
@@ -158,6 +160,7 @@ function applySelectedFormat() {
 
   requestAnimationFrame(() => {
     map.resize();
+    capturePreviewCanvasSize();
   });
 
   return selected;
@@ -170,11 +173,9 @@ function getSelectedFormatKey() {
 function getActiveCameraConfig() {
   const formatKey = getSelectedFormatKey();
   const config = { ...CAMERA_CONFIG, ...(FORMAT_CAMERA_OVERRIDES[formatKey] || {}) };
-
   if (isRenderMode) {
-    config.zoom += formatKey === "portrait" ? 0.28 : 0.22;
+    config.zoom += renderZoomOffset;
   }
-
   return config;
 }
 
@@ -226,6 +227,37 @@ function resetRenderCameraState() {
     smoothedBearing: null,
     smoothedCenter: null,
   };
+}
+
+function capturePreviewCanvasSize() {
+  if (isRenderMode) {
+    return;
+  }
+  const canvas = map.getCanvas?.();
+  if (!canvas) {
+    return;
+  }
+  previewCanvasSize = { width: canvas.width, height: canvas.height };
+}
+
+function computeRenderZoomOffset() {
+  renderZoomOffset = 0;
+  const canvas = map.getCanvas?.();
+  if (!canvas || !previewCanvasSize?.width) {
+    return;
+  }
+
+  const ratio = canvas.width / previewCanvasSize.width;
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    return;
+  }
+
+  const offset = Math.log(ratio) / Math.log(2);
+  if (!Number.isFinite(offset)) {
+    return;
+  }
+
+  renderZoomOffset = Math.max(0, Math.min(1.8, offset));
 }
 
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
@@ -2118,9 +2150,12 @@ function delay(ms) {
 }
 
 function enterRenderMode() {
+  capturePreviewCanvasSize();
   isRenderMode = true;
   resetRenderCameraState();
   document.body.classList.add("render-mode");
+  map.resize();
+  computeRenderZoomOffset();
   syncRouteLineAppearance();
 }
 
@@ -2128,6 +2163,9 @@ function leaveRenderMode() {
   isRenderMode = false;
   resetRenderCameraState();
   document.body.classList.remove("render-mode");
+  renderZoomOffset = 0;
+  map.resize();
+  capturePreviewCanvasSize();
   syncRouteLineAppearance();
 }
 
