@@ -174,7 +174,8 @@ function getActiveCameraConfig() {
   const formatKey = getSelectedFormatKey();
   const config = { ...CAMERA_CONFIG, ...(FORMAT_CAMERA_OVERRIDES[formatKey] || {}) };
   if (isRenderMode) {
-    config.zoom += renderZoomOffset;
+    const extraPortraitBoost = formatKey === "portrait" ? 0.28 : 0;
+    config.zoom += renderZoomOffset + extraPortraitBoost;
   }
   return config;
 }
