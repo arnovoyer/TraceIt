@@ -169,7 +169,13 @@ function getSelectedFormatKey() {
 
 function getActiveCameraConfig() {
   const formatKey = getSelectedFormatKey();
-  return { ...CAMERA_CONFIG, ...(FORMAT_CAMERA_OVERRIDES[formatKey] || {}) };
+  const config = { ...CAMERA_CONFIG, ...(FORMAT_CAMERA_OVERRIDES[formatKey] || {}) };
+
+  if (isRenderMode) {
+    config.zoom += formatKey === "portrait" ? 0.28 : 0.22;
+  }
+
+  return config;
 }
 
 function getRouteLineWidthExpression(stops, scale = 1) {
