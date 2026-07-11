@@ -465,7 +465,7 @@ body.render-mode #mapFrame.portrait .altitude-overlay:not(.hidden) {
 }
 
 body.render-mode #mapFrame.portrait #altitudeSvg {
-  height: 110px;
+  height: 168px;
 }
 
 body.render-mode #mapStage {

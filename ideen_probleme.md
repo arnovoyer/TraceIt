@@ -1,4 +1,5 @@
 - bei render kein höhendiagramm
+- knopf höhenmeter wegmachen/klieiner
 - bei render + - kompass ausblenden
 - bei render stoppt direkt nach abgelaufener zeit und zeigt nicht die gesamte strecke wie beim preview
 - start/ziel punkte überarbeiten
