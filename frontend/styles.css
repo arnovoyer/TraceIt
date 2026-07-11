@@ -458,7 +458,9 @@ body.render-mode #mapFrame.portrait .altitude-overlay:not(.hidden) {
   display: block !important;
   top: 18px;
   left: 18px;
-  width: min(48%, 420px);
+  right: 18px;
+  width: auto;
+  max-width: none;
   z-index: 9;
 }
 
