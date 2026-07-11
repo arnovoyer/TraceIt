@@ -446,9 +446,24 @@ input[type="number"]::selection {
 /* Render Mode Styles - Hide all UI for video export */
 body.render-mode .toolbar,
 body.render-mode .status-row,
-body.render-mode .insight-panel,
+body.render-mode .insight-panel {
+  display: none !important;
+}
+
 body.render-mode .altitude-overlay {
   display: none !important;
+}
+
+body.render-mode #mapFrame.portrait .altitude-overlay:not(.hidden) {
+  display: block !important;
+  top: 18px;
+  left: 18px;
+  width: min(48%, 420px);
+  z-index: 9;
+}
+
+body.render-mode #mapFrame.portrait #altitudeSvg {
+  height: 110px;
 }
 
 body.render-mode #mapStage {
