@@ -226,15 +226,23 @@ async function main() {
   );
 
   console.log("[4/5] Capturing frames ...");
-  const totalSeconds = args.duration + Math.max(2, Math.round(args.duration * 0.18));
-  const totalFrames = Math.ceil(totalSeconds * args.fps);
+  const routeSeconds = args.duration;
+  const holdSeconds = Math.max(2, Math.round(args.duration * 0.18));
+  const routeFrames = Math.max(1, Math.ceil(routeSeconds * args.fps));
+  const holdFrames = Math.max(0, Math.ceil(holdSeconds * args.fps));
+  const totalFrames = routeFrames + holdFrames;
 
   console.log(`Total frames to capture: ${totalFrames}`);
 
   // Capture frames by controlling animation progress directly
   // This eliminates PC performance dependency and ensures all frames are loaded
   for (let i = 0; i < totalFrames; i += 1) {
-    const progress = i / totalFrames;
+    const progress =
+      i >= routeFrames
+        ? 1
+        : routeFrames <= 1
+          ? 1
+          : i / (routeFrames - 1);
     
     // Set animation to specific progress without playing
     try {
