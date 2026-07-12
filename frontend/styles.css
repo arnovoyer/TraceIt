@@ -446,7 +446,9 @@ input[type="number"]::selection {
 /* Render Mode Styles - Hide all UI for video export */
 body.render-mode .toolbar,
 body.render-mode .status-row,
-body.render-mode .insight-panel {
+body.render-mode .insight-panel,
+body.render-mode .maplibregl-ctrl-top-right,
+body.render-mode .maplibregl-ctrl-group {
   display: none !important;
 }
 
