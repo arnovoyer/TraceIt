@@ -227,24 +227,20 @@ async function main() {
 
   console.log("[4/5] Capturing frames ...");
   const routeSeconds = args.duration;
-  const holdSeconds = Math.max(2, Math.round(args.duration * 0.18));
+  const outroSeconds = Math.max(2, Math.round(args.duration * 0.18));
+  const holdSeconds = 0;
   const routeFrames = Math.max(1, Math.ceil(routeSeconds * args.fps));
+  const outroFrames = Math.max(1, Math.ceil(outroSeconds * args.fps));
   const holdFrames = Math.max(0, Math.ceil(holdSeconds * args.fps));
-  const totalFrames = routeFrames + holdFrames;
+  const totalFrames = routeFrames + outroFrames + holdFrames;
 
   console.log(`Total frames to capture: ${totalFrames}`);
 
   // Capture frames by controlling animation progress directly
   // This eliminates PC performance dependency and ensures all frames are loaded
-  for (let i = 0; i < totalFrames; i += 1) {
-    const progress =
-      i >= routeFrames
-        ? 1
-        : routeFrames <= 1
-          ? 1
-          : i / (routeFrames - 1);
-    
-    // Set animation to specific progress without playing
+  for (let i = 0; i < routeFrames; i += 1) {
+    const progress = routeFrames <= 1 ? 1 : i / (routeFrames - 1);
+
     try {
       await page.evaluate((prog) => {
         if (!window.gpxOverlay || !window.gpxOverlay.setProgress) {
@@ -253,17 +249,40 @@ async function main() {
         window.gpxOverlay.setProgress(prog);
       }, progress);
     } catch (err) {
-      console.warn(`Warning setting progress for frame ${i}:`, err.message);
+      console.warn(`Warning setting progress for route frame ${i}:`, err.message);
     }
 
-    // Simple fixed wait instead of complicated conditions
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     const framePath = path.join(normalizedWorkDir, `frame-${String(i).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });
-    
+
     if (i % 10 === 0 || i === totalFrames - 1) {
       console.log(`  Captured frame ${i + 1}/${totalFrames}`);
+    }
+  }
+
+  console.log("  Starting route outro ...");
+  try {
+    await page.evaluate(async (durationMs) => {
+      if (!window.gpxOverlay || !window.gpxOverlay.playOutro) {
+        throw new Error("playOutro not available on gpxOverlay");
+      }
+      await window.gpxOverlay.playOutro(durationMs);
+    }, outroSeconds * 1000);
+  } catch (err) {
+    console.warn("Warning starting route outro:", err.message);
+  }
+
+  for (let i = 0; i < outroFrames + holdFrames; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const frameIndex = routeFrames + i;
+    const framePath = path.join(normalizedWorkDir, `frame-${String(frameIndex).padStart(6, "0")}.png`);
+    await page.screenshot({ path: framePath, type: "png" });
+
+    if (frameIndex % 10 === 0 || frameIndex === totalFrames - 1) {
+      console.log(`  Captured frame ${frameIndex + 1}/${totalFrames}`);
     }
   }
 

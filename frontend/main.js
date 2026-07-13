@@ -1611,6 +1611,37 @@ function playRouteOutro(durationMs = 2600) {
   });
 }
 
+function getRenderedRouteProgress(progress) {
+  if (routePoints.length < 2) {
+    return 0;
+  }
+
+  const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
+  const segmentCount = Math.max(1, activePoints.length - 1);
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+  const scaled = clampedProgress * segmentCount;
+  const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
+  const localT = scaled - segmentIndex;
+
+  const currentRouteIdx = segmentIndex;
+  const nextRouteIdx = Math.min(segmentIndex + 1, routePoints.length - 1);
+  let routeAlpha = localT;
+
+  const currentRoutePt = routePoints[currentRouteIdx];
+  const nextRoutePt = routePoints[nextRouteIdx];
+  const elevationGain =
+    Number.isFinite(currentRoutePt?.ele) && Number.isFinite(nextRoutePt?.ele)
+      ? nextRoutePt.ele - currentRoutePt.ele
+      : 0;
+
+  if (elevationGain > 0) {
+    const slopeFactor = Math.max(0.4, 1.0 - elevationGain * 0.3);
+    routeAlpha = localT * slopeFactor;
+  }
+
+  return Math.min(1, Math.max(0, (segmentIndex + routeAlpha) / Math.max(1, segmentCount)));
+}
+
 function resetAnimatedRouteLine() {
   if (!map.getSource("route") || routePoints.length === 0) {
     return;
@@ -2641,6 +2672,12 @@ window.gpxOverlay = {
   play: async () => {
     return startAnimation();
   },
+  playOutro: async (durationMs) => {
+    await playRouteOutro(durationMs);
+    updateAltitudeOverlayProgress(1);
+    return true;
+  },
+  getRenderedRouteProgress,
   setProgress: setProgress,
   enterRenderMode,
   leaveRenderMode,
