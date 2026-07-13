@@ -2504,7 +2504,6 @@ function setProgress(progress) {
   const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
   const localT = scaled - segmentIndex;
 
-  updateAltitudeOverlayProgress(clampedProgress);
   updateStatsVisibilityByProximity(segmentIndex);
 
   const currentRouteIdx = segmentIndex;
@@ -2524,6 +2523,12 @@ function setProgress(progress) {
     cameraAlpha = localT * slopeFactor;
     routeAlpha = localT * slopeFactor;
   }
+
+  const effectiveProgress = Math.min(
+    1,
+    Math.max(0, (segmentIndex + routeAlpha) / Math.max(1, segmentCount))
+  );
+  updateAltitudeOverlayProgress(effectiveProgress);
 
   const smoothCam = interpolatePoint(
     activePoints[segmentIndex],
