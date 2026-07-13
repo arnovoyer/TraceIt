@@ -262,22 +262,47 @@ async function main() {
     }
   }
 
-  console.log("  Starting route outro ...");
-  try {
-    await page.evaluate(async (durationMs) => {
-      if (!window.gpxOverlay || !window.gpxOverlay.playOutro) {
-        throw new Error("playOutro not available on gpxOverlay");
-      }
-      await window.gpxOverlay.playOutro(durationMs);
-    }, outroSeconds * 1000);
-  } catch (err) {
-    console.warn("Warning starting route outro:", err.message);
-  }
+  console.log("  Capturing route outro ...");
+  for (let i = 0; i < outroFrames; i += 1) {
+    const outroProgress = outroFrames <= 1 ? 1 : i / (outroFrames - 1);
 
-  for (let i = 0; i < outroFrames + holdFrames; i += 1) {
+    try {
+      await page.evaluate((prog) => {
+        if (!window.gpxOverlay || !window.gpxOverlay.setOutroProgress) {
+          throw new Error("setOutroProgress not available on gpxOverlay");
+        }
+        window.gpxOverlay.setOutroProgress(prog);
+      }, outroProgress);
+    } catch (err) {
+      console.warn(`Warning setting outro progress for frame ${i}:`, err.message);
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 200));
 
     const frameIndex = routeFrames + i;
+    const framePath = path.join(normalizedWorkDir, `frame-${String(frameIndex).padStart(6, "0")}.png`);
+    await page.screenshot({ path: framePath, type: "png" });
+
+    if (frameIndex % 10 === 0 || frameIndex === totalFrames - 1) {
+      console.log(`  Captured frame ${frameIndex + 1}/${totalFrames}`);
+    }
+  }
+
+  for (let i = 0; i < holdFrames; i += 1) {
+    try {
+      await page.evaluate(() => {
+        if (!window.gpxOverlay || !window.gpxOverlay.setOutroProgress) {
+          throw new Error("setOutroProgress not available on gpxOverlay");
+        }
+        window.gpxOverlay.setOutroProgress(1);
+      });
+    } catch (err) {
+      console.warn(`Warning holding outro frame ${i}:`, err.message);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const frameIndex = routeFrames + outroFrames + i;
     const framePath = path.join(normalizedWorkDir, `frame-${String(frameIndex).padStart(6, "0")}.png`);
     await page.screenshot({ path: framePath, type: "png" });
 

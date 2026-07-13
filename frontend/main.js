@@ -47,6 +47,7 @@ let renderCameraState = {
   smoothedBearing: null,
   smoothedCenter: null,
 };
+let renderOutroState = null;
 let previewCanvasSize = { width: null, height: null };
 let renderZoomOffset = 0;
 
@@ -228,6 +229,7 @@ function resetRenderCameraState() {
     smoothedBearing: null,
     smoothedCenter: null,
   };
+  renderOutroState = null;
 }
 
 function capturePreviewCanvasSize() {
@@ -322,6 +324,13 @@ function lerp(a, b, t) {
 
 function shortestAngleDelta(fromDeg, toDeg) {
   return ((toDeg - fromDeg + 540) % 360) - 180;
+}
+
+function easeInOutCubic(t) {
+  const clamped = Math.min(1, Math.max(0, t));
+  return clamped < 0.5
+    ? 4 * clamped * clamped * clamped
+    : 1 - Math.pow(-2 * clamped + 2, 3) / 2;
 }
 
 function createLineFeature(coords) {
@@ -1580,6 +1589,105 @@ function buildRouteBounds(points) {
   return bounds;
 }
 
+function getOutroPadding() {
+  const cfg = getActiveCameraConfig();
+  const padding = cfg.outroPadding;
+
+  if (!isRenderMode) {
+    return padding;
+  }
+
+  if (typeof padding === "number") {
+    return Math.max(42, Math.round(padding * 0.82));
+  }
+
+  return {
+    top: Math.max(48, Math.round((padding.top ?? 80) * 0.72)),
+    bottom: Math.max(48, Math.round((padding.bottom ?? 80) * 0.72)),
+    left: Math.max(30, Math.round((padding.left ?? 60) * 0.74)),
+    right: Math.max(30, Math.round((padding.right ?? 60) * 0.74)),
+  };
+}
+
+function getOutroMaxZoom() {
+  const formatKey = getSelectedFormatKey();
+
+  if (isRenderMode) {
+    return formatKey === "portrait" ? 13.6 : 13.35;
+  }
+
+  return formatKey === "portrait" ? 12.8 : 12.5;
+}
+
+function prepareRouteOutroState() {
+  if (routePoints.length < 2) {
+    renderOutroState = null;
+    return null;
+  }
+
+  const cfg = getActiveCameraConfig();
+  const bounds = buildRouteBounds(routePoints);
+  const targetCamera = map.cameraForBounds(bounds, {
+    padding: getOutroPadding(),
+    bearing: cfg.outroBearing,
+    pitch: cfg.outroPitch,
+    maxZoom: getOutroMaxZoom(),
+  });
+
+  if (!targetCamera?.center) {
+    renderOutroState = null;
+    return null;
+  }
+
+  const center = map.getCenter();
+  renderOutroState = {
+    startCenter: { lon: center.lng, lat: center.lat },
+    startZoom: map.getZoom(),
+    startPitch: map.getPitch(),
+    startBearing: map.getBearing(),
+    targetCenter: { lon: targetCamera.center.lng, lat: targetCamera.center.lat },
+    targetZoom: targetCamera.zoom,
+    liftZoom: Math.max(0, targetCamera.zoom - (isRenderMode ? 0.38 : 0.26)),
+    targetPitch: cfg.outroPitch,
+    targetBearing: cfg.outroBearing,
+  };
+
+  return renderOutroState;
+}
+
+function setOutroProgress(progress) {
+  const clamped = Math.min(1, Math.max(0, progress));
+  const state = renderOutroState ?? prepareRouteOutroState();
+  if (!state) {
+    return false;
+  }
+
+  const riseT = easeInOutCubic(Math.min(1, clamped / 0.42));
+  const centerT = easeInOutCubic(Math.max(0, (clamped - 0.12) / 0.88));
+  const settleT = easeInOutCubic(Math.max(0, (clamped - 0.28) / 0.72));
+  const rotateT = easeInOutCubic(Math.max(0, (clamped - 0.18) / 0.82));
+  const flattenT = easeInOutCubic(Math.max(0, (clamped - 0.4) / 0.6));
+  const zoomBlendT = easeInOutCubic(Math.max(0, (clamped - 0.18) / 0.82));
+  const bearingDelta = shortestAngleDelta(state.startBearing, state.targetBearing);
+  const liftedZoom = lerp(state.startZoom, state.liftZoom, riseT);
+  const settledZoom = lerp(state.liftZoom, state.targetZoom, settleT);
+  const currentZoom = lerp(liftedZoom, settledZoom, zoomBlendT);
+
+  map.jumpTo({
+    center: [
+      lerp(state.startCenter.lon, state.targetCenter.lon, centerT),
+      lerp(state.startCenter.lat, state.targetCenter.lat, centerT),
+    ],
+    zoom: currentZoom,
+    pitch: lerp(state.startPitch, state.targetPitch, flattenT),
+    bearing: state.startBearing + bearingDelta * rotateT,
+    duration: 0,
+  });
+
+  updateAltitudeOverlayProgress(1);
+  return true;
+}
+
 function playRouteOutro(durationMs = 2600) {
   return new Promise((resolve) => {
     if (routePoints.length < 2) {
@@ -1598,13 +1706,14 @@ function playRouteOutro(durationMs = 2600) {
     };
 
     const cfg = getActiveCameraConfig();
+    renderOutroState = null;
     map.once("moveend", finish);
     map.fitBounds(bounds, {
-      padding: cfg.outroPadding,
+      padding: getOutroPadding(),
       duration: durationMs,
       pitch: cfg.outroPitch,
       bearing: cfg.outroBearing,
-      maxZoom: 12.5,
+      maxZoom: getOutroMaxZoom(),
     });
 
     setTimeout(finish, durationMs + 300);
@@ -2677,6 +2786,7 @@ window.gpxOverlay = {
     updateAltitudeOverlayProgress(1);
     return true;
   },
+  setOutroProgress,
   getRenderedRouteProgress,
   setProgress: setProgress,
   enterRenderMode,
