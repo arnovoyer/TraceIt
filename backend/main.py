@@ -12,7 +12,7 @@ import uuid
 from fastapi.responses import FileResponse
 
 import gpxpy
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="GPX Video Overlay API", version="0.1.0")
@@ -190,6 +190,7 @@ def _start_render_job(
     duration: int,
     format: str,
     fps: int,
+    show_altitude: bool,
 ) -> None:
     job = render_jobs[job_id]
     job["status"] = "running"
@@ -208,6 +209,7 @@ def _start_render_job(
         "--duration", str(duration),
         "--fps", str(fps),
         "--format", format,
+        "--show-altitude", "1" if show_altitude else "0",
         "--frontend-url", "http://127.0.0.1:5173",
         "--api-url", "http://127.0.0.1:8000",
     ]
@@ -265,7 +267,8 @@ async def render_gpx(
     file: UploadFile = File(...),
     duration: int = 40,
     format: str = "landscape",
-    fps: int = 30
+    fps: int = 30,
+    show_altitude: int = Query(1, alias="showAltitude"),
 ):
     if not file.filename or not file.filename.lower().endswith(".gpx"):
         raise HTTPException(status_code=400, detail="Please upload a .gpx file.")
@@ -306,7 +309,7 @@ async def render_gpx(
 
     thread = threading.Thread(
         target=_start_render_job,
-        args=(job_id, temp_dir, gpx_path, output_path, duration, format, fps),
+        args=(job_id, temp_dir, gpx_path, output_path, duration, format, fps, show_altitude != 0),
         daemon=True,
     )
     thread.start()

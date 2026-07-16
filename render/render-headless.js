@@ -12,6 +12,7 @@ function parseArgs(argv) {
     duration: 40,
     fps: 30,
     format: "landscape",
+    showAltitude: true,
     frontendUrl: "http://127.0.0.1:5173",
     apiUrl: "http://127.0.0.1:8000",
   };
@@ -30,6 +31,7 @@ function parseArgs(argv) {
     if (key === "duration") args.duration = Number(value);
     if (key === "fps") args.fps = Number(value);
     if (key === "format") args.format = value === "portrait" ? "portrait" : "landscape";
+    if (key === "show-altitude") args.showAltitude = value !== "0";
     if (key === "frontend-url") args.frontendUrl = value;
     if (key === "api-url") args.apiUrl = value;
   }
@@ -207,12 +209,15 @@ async function main() {
 
   console.log("[3/5] Loading route and prewarming tiles ...");
   await page.evaluate(
-    async ({ parsedData, format, duration }) => {
+    async ({ parsedData, format, duration, showAltitude }) => {
       if (!window.gpxOverlay) {
         throw new Error("window.gpxOverlay is not available");
       }
 
       window.gpxOverlay.applyFormat(format);
+      if (window.gpxOverlay.setAltitudeOverlayVisible) {
+        window.gpxOverlay.setAltitudeOverlayVisible(showAltitude, false);
+      }
       const durationInput = document.getElementById("durationInput");
       if (durationInput) {
         durationInput.value = String(duration);
@@ -222,7 +227,12 @@ async function main() {
       await window.gpxOverlay.prewarmTiles();
       window.gpxOverlay.enterRenderMode(); // Hide UI!
     },
-    { parsedData: parsed, format: args.format, duration: args.duration }
+    {
+      parsedData: parsed,
+      format: args.format,
+      duration: args.duration,
+      showAltitude: args.showAltitude,
+    }
   );
 
   console.log("[4/5] Capturing frames ...");

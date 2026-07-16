@@ -9,6 +9,7 @@ const statusText = document.getElementById("statusText");
 const gpxInput = document.getElementById("gpxInput");
 const playButton = document.getElementById("playButton");
 const recordButton = document.getElementById("recordButton");
+const altitudeToggleButton = document.getElementById("altitudeToggleButton");
 const photoInput = document.getElementById("photoInput");
 const durationInput = document.getElementById("durationInput");
 const formatSelect = document.getElementById("formatSelect");
@@ -50,6 +51,7 @@ let renderCameraState = {
 let renderOutroState = null;
 let previewCanvasSize = { width: null, height: null };
 let renderZoomOffset = 0;
+let isAltitudeOverlayVisible = true;
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
@@ -72,6 +74,9 @@ const ALTITUDE_SVG = {
   minKmLabelGap: 34,
   minEleLabelGap: 15,
 };
+
+const ALTITUDE_VISIBILITY_STORAGE_KEY = "traceit.altitudeOverlayVisible";
+isAltitudeOverlayVisible = loadAltitudeOverlayPreference();
 
 const CAMERA_CONFIG = {
   pitch: 60, // Less steep
@@ -138,6 +143,55 @@ const FORMAT_CONFIG = {
 
 function setStatus(text) {
   statusText.textContent = text;
+}
+
+function loadAltitudeOverlayPreference() {
+  try {
+    return window.localStorage.getItem(ALTITUDE_VISIBILITY_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function storeAltitudeOverlayPreference() {
+  try {
+    window.localStorage.setItem(
+      ALTITUDE_VISIBILITY_STORAGE_KEY,
+      isAltitudeOverlayVisible ? "1" : "0"
+    );
+  } catch {
+    // Ignore storage errors and keep the current in-memory toggle.
+  }
+}
+
+function syncAltitudeToggleButton() {
+  if (!altitudeToggleButton) {
+    return;
+  }
+
+  altitudeToggleButton.textContent = isAltitudeOverlayVisible
+    ? "Hoehenprofil ausblenden"
+    : "Hoehenprofil einblenden";
+  altitudeToggleButton.setAttribute("aria-pressed", String(isAltitudeOverlayVisible));
+}
+
+function syncAltitudeOverlayVisibility() {
+  if (!altitudeOverlay) {
+    return;
+  }
+
+  const shouldShow = Boolean(altitudeOverlayState) && isAltitudeOverlayVisible;
+  altitudeOverlay.classList.toggle("hidden", !shouldShow);
+  syncAltitudeToggleButton();
+}
+
+function setAltitudeOverlayVisible(visible, { persist = true } = {}) {
+  isAltitudeOverlayVisible = Boolean(visible);
+  if (persist) {
+    storeAltitudeOverlayPreference();
+  }
+  syncAltitudeOverlayVisibility();
+  return isAltitudeOverlayVisible;
 }
 
 function createStyleUrl() {
@@ -1452,7 +1506,7 @@ function renderAltitudeOverlay(points) {
   altitudeOverlayState = data;
 
   if (!data) {
-    altitudeOverlay.classList.add("hidden");
+    syncAltitudeOverlayVisibility();
     return;
   }
 
@@ -1463,7 +1517,7 @@ function renderAltitudeOverlay(points) {
   altitudeClipRect.setAttribute("height", String(data.height));
   renderAltitudeMarkers(data);
   updateAltitudeOverlayProgress(0);
-  altitudeOverlay.classList.remove("hidden");
+  syncAltitudeOverlayVisibility();
 }
 
 function sanitizeAndSamplePoints(points) {
@@ -2419,7 +2473,7 @@ async function recordAnimationAndDownload() {
 
     console.log("Starting render job...");
     const response = await fetch(
-      `${API_BASE_URL}/api/gpx/render?duration=${encodeURIComponent(durationSeconds)}&format=${encodeURIComponent(formatKey)}&fps=${encodeURIComponent(fps)}`,
+      `${API_BASE_URL}/api/gpx/render?duration=${encodeURIComponent(durationSeconds)}&format=${encodeURIComponent(formatKey)}&fps=${encodeURIComponent(fps)}&showAltitude=${encodeURIComponent(isAltitudeOverlayVisible ? 1 : 0)}`,
       { method: "POST", body: formData }
     );
 
@@ -2578,6 +2632,11 @@ gpxInput.addEventListener("change", async (event) => {
 formatSelect.addEventListener("change", () => {
   const selected = applySelectedFormat();
   setStatus(`Format umgestellt auf ${FORMAT_CONFIG[selected].label}.`);
+});
+
+altitudeToggleButton?.addEventListener("click", () => {
+  const visible = setAltitudeOverlayVisible(!isAltitudeOverlayVisible);
+  setStatus(`Hoehenprofil ${visible ? "eingeblendet" : "ausgeblendet"}.`);
 });
 
 photoInput.addEventListener("change", async (event) => {
@@ -2786,12 +2845,17 @@ window.gpxOverlay = {
     updateAltitudeOverlayProgress(1);
     return true;
   },
+  setAltitudeOverlayVisible: (visible, persist = false) => {
+    return setAltitudeOverlayVisible(visible, { persist });
+  },
   setOutroProgress,
   getRenderedRouteProgress,
   setProgress: setProgress,
   enterRenderMode,
   leaveRenderMode,
 };
+
+syncAltitudeToggleButton();
 
 playButton.addEventListener("click", () => {
   startAnimation();
