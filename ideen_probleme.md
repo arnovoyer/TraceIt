@@ -1,6 +1,6 @@
 - DONE: bei render kein höhendiagramm
 - knopf höhenmeter wegmachen/klieiner
 - DONE: bei render + - kompass ausblenden
-- bei render stoppt direkt nach abgelaufener zeit und zeigt nicht die gesamte strecke wie beim preview
+- SEMIDONE: bei render stoppt direkt nach abgelaufener zeit     und      zeigt nicht die gesamte strecke wie beim preview
 - start/ziel punkte überarbeiten
 - start/ziel punkte location überarbeiten
