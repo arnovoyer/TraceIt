@@ -11,6 +11,7 @@ Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre 
   - MapLibre 3D (Terrain + Satelliten-Style)
   - Route zeichnen
   - Kamera folgt der Route mit dynamischem Bearing/Pitch
+  - Höhendiagramm
 
 
 ## 1) Voraussetzungen
