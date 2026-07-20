@@ -83,7 +83,7 @@ Was du tun kannst:
 
 Hinweis zur Rechenleistung:
 - Browser-Aufnahme ist immer Echtzeit und zeigt die Szene waehrenddessen an.
-- Fuer echtes Rendern ohne Live-Anzeige nutze den Puppeteer/FFmpeg-Workflow (headless), damit das Encoding nicht an die interaktive Darstellung gebunden ist.
+- Für echtes Rendern ohne Live-Anzeige nutze den Puppeteer/FFmpeg-Workflow (headless), damit das Encoding nicht an die interaktive Darstellung gebunden ist.
 
 Hinweis zu 9:16 und Bildausschnitt:
 - Das 9:16-Format nutzt eigene Kamera-Parameter, damit die Strecke besser im Bild bleibt.
