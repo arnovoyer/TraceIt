@@ -1,6 +1,6 @@
 # GPX Video Overlay
 
-Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre GL JS und einem FastAPI-Backend. Dieses Projekt ist in Anlehnung an Relive oder die Tour de France Etappen Animationen
+Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre GL JS und einem FastAPI-Backend. Dieses Projekt ist in Anlehnung an Relive oder die Tour de France Etappen Animationen enstanden
 
 ## Architektur
 
