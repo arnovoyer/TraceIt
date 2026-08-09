@@ -1,6 +1,6 @@
 # GPX Video Overlay
 
-Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre GL JS und einem FastAPI-Backend.
+Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre GL JS und einem FastAPI-Backend. Dieses Projekt ist in Anlehnung an Relive oder die Tour de France Etappen Animationen enstanden.
 
 ## Architektur
 
@@ -11,6 +11,7 @@ Dieses Projekt erzeugt eine 3D-Kamerafahrt entlang einer GPX-Route mit MapLibre 
   - MapLibre 3D (Terrain + Satelliten-Style)
   - Route zeichnen
   - Kamera folgt der Route mit dynamischem Bearing/Pitch
+  - Höhendiagramm
 
 
 ## 1) Voraussetzungen
@@ -50,7 +51,7 @@ Wichtig:
 - Button `Animation aufnehmen & herunterladen` erzeugt einen direkten Download als `.webm`.
 - Über `Format` kannst du zwischen `16:9` und `9:16` wechseln (wirkt auf Preview und Aufnahme).
 - Oben links wird ein Höhenprofil aus der GPX angezeigt: bereits gefahrene Strecke farbig, restlicher Teil transparent.
-- Highlights werden automatisch markiert: schnellster Abschnitt (⚡) und höchster Punkt (▲). Die Kamera verlangsamt dort kurz.
+- Nichtmehr Inkludiert: Highlights werden automatisch markiert: schnellster Abschnitt (⚡) und höchster Punkt (▲). Die Kamera verlangsamt dort kurz.
 - Foto-Spots: Mit `Bild-Spot` ein Bild wählen und dann auf die Karte klicken. Der Spot erscheint als Marker und wird in der Fahrt kurz eingeblendet.
 - Foto-Zeitpunkt-Erkennung: Wenn das Bild einen EXIF-Zeitstempel hat und die GPX Zeitdaten enthält, wird der Foto-Spot automatisch an den passenden Routenzeitpunkt gesetzt (sonst manueller Klick auf die Karte).
 
@@ -82,7 +83,7 @@ Was du tun kannst:
 
 Hinweis zur Rechenleistung:
 - Browser-Aufnahme ist immer Echtzeit und zeigt die Szene waehrenddessen an.
-- Fuer echtes Rendern ohne Live-Anzeige nutze den Puppeteer/FFmpeg-Workflow (headless), damit das Encoding nicht an die interaktive Darstellung gebunden ist.
+- Für echtes Rendern ohne Live-Anzeige nutze den Puppeteer/FFmpeg-Workflow (headless), damit das Encoding nicht an die interaktive Darstellung gebunden ist.
 
 Hinweis zu 9:16 und Bildausschnitt:
 - Das 9:16-Format nutzt eigene Kamera-Parameter, damit die Strecke besser im Bild bleibt.
