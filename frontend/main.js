@@ -233,9 +233,10 @@ function getActiveCameraConfig() {
     config.zoom += renderZoomOffset + extraPortraitBoost;
 
     if (formatKey === "portrait" && isAltitudeOverlayVisible) {
-      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.24);
-      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.085);
-      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.67);
+      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.29);
+      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.1);
+      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.695);
+      config.backOffsetM = Math.max(config.backOffsetM ?? 0, 76);
     }
   }
   return config;
@@ -1879,13 +1880,17 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let anchorX = cfg.headAnchorX ?? 0.5;
   let anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
 
-  if (isRenderMode && isPortrait && isAltitudeOverlayVisible) {
-    marginTop = Math.max(marginTop, 0.245);
-    anchorY = Math.max(anchorY, 0.67);
-    marginX = Math.max(marginX, 0.085);
+  const needsHardAltitudeSafeY = isRenderMode && isPortrait && isAltitudeOverlayVisible;
+  if (needsHardAltitudeSafeY) {
+    marginTop = Math.max(marginTop, 0.29);
+    anchorY = Math.max(anchorY, 0.695);
+    marginX = Math.max(marginX, 0.1);
   }
 
-  const pullStrength = isPortrait ? 0.15 : 0.08;
+  let pullStrength = isPortrait ? 0.18 : 0.08;
+  if (needsHardAltitudeSafeY) {
+    pullStrength = 0.28;
+  }
 
   map.jumpTo({
     center: [rawCenter.lon, rawCenter.lat],
@@ -1898,9 +1903,15 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const headPx = map.project([headPoint.lon, headPoint.lat]);
   const w = canvas.width;
   const h = canvas.height;
+
+  let minY = h * marginTop;
+  if (needsHardAltitudeSafeY) {
+    const altitudeWidgetBottomPx = Math.min(h * 0.42, w * (118 / 320) + 18 + 64);
+    minY = Math.max(minY, altitudeWidgetBottomPx + 64);
+  }
+
   const minX = w * marginX;
   const maxX = w * (1 - marginX);
-  const minY = h * marginTop;
   const maxY = h * (1 - marginBottom);
   const targetX = w * anchorX;
   const targetY = h * anchorY;
