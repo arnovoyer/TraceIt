@@ -4,3 +4,5 @@
 - SEMIDONE: bei render stoppt direkt nach abgelaufener zeit     und      zeigt nicht die gesamte strecke wie beim preview
 - start/ziel punkte überarbeiten
 - start/ziel punkte location überarbeiten
+- linie geht in höhendiagramm
+- höhendiagramm startet erst bei ung 2 sekunden

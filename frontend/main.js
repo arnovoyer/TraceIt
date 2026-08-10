@@ -231,6 +231,12 @@ function getActiveCameraConfig() {
   if (isRenderMode) {
     const extraPortraitBoost = formatKey === "portrait" ? 0.42 : 0;
     config.zoom += renderZoomOffset + extraPortraitBoost;
+
+    if (formatKey === "portrait" && isAltitudeOverlayVisible) {
+      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.24);
+      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.085);
+      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.67);
+    }
   }
   return config;
 }
@@ -1867,11 +1873,18 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const cfg = getActiveCameraConfig();
   const isPortrait = formatKey === "portrait";
 
-  const marginX = cfg.viewportMarginX ?? (isPortrait ? 0.1 : 0.08);
-  const marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.1 : 0.08);
-  const marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.08 : 0.06);
-  const anchorX = cfg.headAnchorX ?? 0.5;
-  const anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
+  let marginX = cfg.viewportMarginX ?? (isPortrait ? 0.1 : 0.08);
+  let marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.1 : 0.08);
+  let marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.08 : 0.06);
+  let anchorX = cfg.headAnchorX ?? 0.5;
+  let anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
+
+  if (isRenderMode && isPortrait && isAltitudeOverlayVisible) {
+    marginTop = Math.max(marginTop, 0.245);
+    anchorY = Math.max(anchorY, 0.67);
+    marginX = Math.max(marginX, 0.085);
+  }
+
   const pullStrength = isPortrait ? 0.15 : 0.08;
 
   map.jumpTo({
