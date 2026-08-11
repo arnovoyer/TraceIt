@@ -1360,6 +1360,20 @@ function formatKmLabel(km) {
   return `${km.toFixed(1)} km`;
 }
 
+function getAltitudeOverlaySafeBottomPx(canvasEl) {
+  const fallback = (canvasEl?.height || 0) * 0.40;
+  const widget = document.getElementById("altitudeOverlay");
+  if (!widget || widget.classList.contains("hidden")) {
+    return fallback;
+  }
+  const wRect = widget.getBoundingClientRect();
+  if (!canvasEl) return Math.max(fallback, wRect.bottom + 120);
+  const cRect = canvasEl.getBoundingClientRect();
+  const widgetBottomInCanvas = wRect.bottom - cRect.top;
+  const safetyBuffer = 160;
+  return Math.max(fallback, widgetBottomInCanvas + safetyBuffer);
+}
+
 function buildAltitudePathData(points) {
   if (!points || points.length < 2) {
     return null;
@@ -1906,8 +1920,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   let minY = h * marginTop;
   if (needsHardAltitudeSafeY) {
-    const altitudeWidgetBottomPx = Math.min(h * 0.50, w * (118 / 320) + 18 + 140);
-    minY = Math.max(minY, altitudeWidgetBottomPx + 140);
+    minY = getAltitudeOverlaySafeBottomPx(canvas);
   }
 
   const minX = w * marginX;
