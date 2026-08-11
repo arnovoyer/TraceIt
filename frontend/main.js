@@ -233,10 +233,10 @@ function getActiveCameraConfig() {
     config.zoom += renderZoomOffset + extraPortraitBoost;
 
     if (formatKey === "portrait" && isAltitudeOverlayVisible) {
-      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.33);
-      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.11);
-      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.715);
-      config.backOffsetM = Math.max(config.backOffsetM ?? 0, 82);
+      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.40);
+      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.13);
+      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.78);
+      config.backOffsetM = Math.max(config.backOffsetM ?? 0, 95);
     }
   }
   return config;
@@ -1882,14 +1882,14 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   const needsHardAltitudeSafeY = isRenderMode && isPortrait && isAltitudeOverlayVisible;
   if (needsHardAltitudeSafeY) {
-    marginTop = Math.max(marginTop, 0.33);
-    anchorY = Math.max(anchorY, 0.715);
-    marginX = Math.max(marginX, 0.11);
+    marginTop = Math.max(marginTop, 0.40);
+    anchorY = Math.max(anchorY, 0.78);
+    marginX = Math.max(marginX, 0.13);
   }
 
   let pullStrength = isPortrait ? 0.19 : 0.08;
   if (needsHardAltitudeSafeY) {
-    pullStrength = 0.34;
+    pullStrength = 0.40;
   }
 
   map.jumpTo({
@@ -1906,8 +1906,8 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   let minY = h * marginTop;
   if (needsHardAltitudeSafeY) {
-    const altitudeWidgetBottomPx = Math.min(h * 0.46, w * (118 / 320) + 18 + 80);
-    minY = Math.max(minY, altitudeWidgetBottomPx + 84);
+    const altitudeWidgetBottomPx = Math.min(h * 0.50, w * (118 / 320) + 18 + 140);
+    minY = Math.max(minY, altitudeWidgetBottomPx + 140);
   }
 
   const minX = w * marginX;
@@ -1930,7 +1930,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   if (headPx.y < minY) {
     dy = headPx.y - minY;
     if (needsHardAltitudeSafeY) {
-      dy -= 10;
+      dy -= 24;
     }
   } else if (headPx.y > maxY) {
     dy = headPx.y - maxY;
@@ -1956,10 +1956,10 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
         duration: 0,
       });
       const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY - 4) {
+      if (verifyHeadPx.y >= minY + 10) {
         break;
       }
-      const safetyDeltaPx = minY - verifyHeadPx.y + 18;
+      const safetyDeltaPx = minY - verifyHeadPx.y + 32;
       const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
       adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
       resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
