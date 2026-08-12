@@ -233,10 +233,10 @@ function getActiveCameraConfig() {
     config.zoom += renderZoomOffset + extraPortraitBoost;
 
     if (formatKey === "portrait" && isAltitudeOverlayVisible) {
-      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.38);
-      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.13);
-      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.72);
-      config.backOffsetM = Math.max(config.backOffsetM ?? 0, 95);
+      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.33);
+      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.11);
+      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.715);
+      config.backOffsetM = Math.max(config.backOffsetM ?? 0, 82);
     }
   }
   return config;
@@ -1361,16 +1361,16 @@ function formatKmLabel(km) {
 }
 
 function getAltitudeOverlaySafeBottomPx(canvasEl) {
-  const fallback = (canvasEl?.height || 0) * 0.42;
+  const fallback = (canvasEl?.height || 0) * 0.33;
   const widget = document.getElementById("altitudeOverlay");
   if (!widget || widget.classList.contains("hidden")) {
     return fallback;
   }
   const wRect = widget.getBoundingClientRect();
-  if (!canvasEl) return Math.max(fallback, wRect.bottom + 140);
+  if (!canvasEl) return Math.max(fallback, wRect.bottom + 80);
   const cRect = canvasEl.getBoundingClientRect();
   const widgetBottomInCanvas = wRect.bottom - cRect.top;
-  const safetyBuffer = 180;
+  const safetyBuffer = 120;
   return Math.max(fallback, widgetBottomInCanvas + safetyBuffer);
 }
 
@@ -1896,12 +1896,15 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   const needsHardAltitudeSafeY = isRenderMode && isPortrait && isAltitudeOverlayVisible;
   if (needsHardAltitudeSafeY) {
-    marginTop = Math.max(marginTop, 0.38);
-    anchorY = Math.max(anchorY, 0.72);
-    marginX = Math.max(marginX, 0.13);
+    marginTop = Math.max(marginTop, 0.33);
+    anchorY = Math.max(anchorY, 0.715);
+    marginX = Math.max(marginX, 0.11);
   }
 
-  let basePullStrength = isPortrait ? 0.19 : 0.08;
+  let pullStrength = isPortrait ? 0.19 : 0.08;
+  if (needsHardAltitudeSafeY) {
+    pullStrength = 0.34;
+  }
 
   map.jumpTo({
     center: [rawCenter.lon, rawCenter.lat],
@@ -1918,17 +1921,6 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let minY = h * marginTop;
   if (needsHardAltitudeSafeY) {
     minY = getAltitudeOverlaySafeBottomPx(canvas);
-  }
-
-  let pullStrength = basePullStrength;
-  if (needsHardAltitudeSafeY) {
-    const distAboveSafe = headPx.y - minY;
-    if (distAboveSafe < 60) {
-      const t = 1 - Math.max(0, Math.min(1, (distAboveSafe + 30) / 60));
-      pullStrength = 0.20 + t * 0.35;
-    } else {
-      pullStrength = 0.20;
-    }
   }
 
   const minX = w * marginX;
@@ -1951,7 +1943,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   if (headPx.y < minY) {
     dy = headPx.y - minY;
     if (needsHardAltitudeSafeY) {
-      dy -= 36;
+      dy -= 10;
     }
   } else if (headPx.y > maxY) {
     dy = headPx.y - maxY;
@@ -1968,7 +1960,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
 
   if (needsHardAltitudeSafeY) {
-    for (let guard = 0; guard < 7; guard += 1) {
+    for (let guard = 0; guard < 5; guard += 1) {
       map.jumpTo({
         center: [resultCenter.lon, resultCenter.lat],
         bearing,
@@ -1977,10 +1969,10 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
         duration: 0,
       });
       const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY + 20) {
+      if (verifyHeadPx.y >= minY - 4) {
         break;
       }
-      const safetyDeltaPx = minY - verifyHeadPx.y + 50;
+      const safetyDeltaPx = minY - verifyHeadPx.y + 18;
       const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
       adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
       resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
