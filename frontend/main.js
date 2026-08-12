@@ -1367,10 +1367,10 @@ function getAltitudeOverlaySafeBottomPx(canvasEl) {
     return fallback;
   }
   const wRect = widget.getBoundingClientRect();
-  if (!canvasEl) return Math.max(fallback, wRect.bottom + 80);
+  if (!canvasEl) return Math.max(fallback, wRect.bottom + 100);
   const cRect = canvasEl.getBoundingClientRect();
   const widgetBottomInCanvas = wRect.bottom - cRect.top;
-  const safetyBuffer = 120;
+  const safetyBuffer = 160;
   return Math.max(fallback, widgetBottomInCanvas + safetyBuffer);
 }
 
@@ -1969,10 +1969,11 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
         duration: 0,
       });
       const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY - 4) {
+      if (verifyHeadPx.y >= minY + 8) {
         break;
       }
-      const safetyDeltaPx = minY - verifyHeadPx.y + 18;
+      const stepBoost = guard >= 2 ? 60 : 28;
+      const safetyDeltaPx = minY - verifyHeadPx.y + stepBoost;
       const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
       adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
       resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
