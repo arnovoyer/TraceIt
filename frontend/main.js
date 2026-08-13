@@ -1367,10 +1367,10 @@ function getAltitudeOverlaySafeBottomPx(canvasEl) {
     return fallback;
   }
   const wRect = widget.getBoundingClientRect();
-  if (!canvasEl) return Math.max(fallback, wRect.bottom + 90);
+  if (!canvasEl) return Math.max(fallback, wRect.bottom + 96);
   const cRect = canvasEl.getBoundingClientRect();
   const widgetBottomInCanvas = wRect.bottom - cRect.top;
-  const safetyBuffer = 140;
+  const safetyBuffer = 150;
   return Math.max(fallback, widgetBottomInCanvas + safetyBuffer);
 }
 
