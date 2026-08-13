@@ -1896,8 +1896,8 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   const needsHardAltitudeSafeY = isRenderMode && isPortrait && isAltitudeOverlayVisible;
   if (needsHardAltitudeSafeY) {
-    marginTop = Math.max(marginTop, 0.33);
-    anchorY = Math.max(anchorY, 0.715);
+    marginTop = Math.max(marginTop, 0.36);
+    anchorY = Math.max(anchorY, 0.75);
     marginX = Math.max(marginX, 0.11);
   }
 
