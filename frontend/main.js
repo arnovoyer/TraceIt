@@ -1948,7 +1948,12 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   } else if (headPx.y > maxY) {
     dy = headPx.y - maxY;
   } else {
-    dy = (headPx.y - targetY) * pullStrength;
+    if (needsHardAltitudeSafeY && headPx.y < minY + 50) {
+      const t = 1 - Math.max(0, (headPx.y - minY) / 50);
+      dy = (headPx.y - targetY) * pullStrength - t * 16;
+    } else {
+      dy = (headPx.y - targetY) * pullStrength;
+    }
   }
 
   if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
