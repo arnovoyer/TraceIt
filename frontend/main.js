@@ -1367,10 +1367,10 @@ function getAltitudeOverlaySafeBottomPx(canvasEl) {
     return fallback;
   }
   const wRect = widget.getBoundingClientRect();
-  if (!canvasEl) return Math.max(fallback, wRect.bottom + 100);
+  if (!canvasEl) return Math.max(fallback, wRect.bottom + 90);
   const cRect = canvasEl.getBoundingClientRect();
   const widgetBottomInCanvas = wRect.bottom - cRect.top;
-  const safetyBuffer = 160;
+  const safetyBuffer = 140;
   return Math.max(fallback, widgetBottomInCanvas + safetyBuffer);
 }
 
@@ -1943,14 +1943,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   if (headPx.y < minY) {
     dy = headPx.y - minY;
     if (needsHardAltitudeSafeY) {
-      const violation = minY - headPx.y;
-      if (violation > 30) {
-        dy -= 60;
-      } else if (violation > 10) {
-        dy -= 30;
-      } else {
-        dy -= 12;
-      }
+      dy -= 10;
     }
   } else if (headPx.y > maxY) {
     dy = headPx.y - maxY;
@@ -1967,7 +1960,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
 
   if (needsHardAltitudeSafeY) {
-    for (let guard = 0; guard < 6; guard += 1) {
+    for (let guard = 0; guard < 5; guard += 1) {
       map.jumpTo({
         center: [resultCenter.lon, resultCenter.lat],
         bearing,
@@ -1976,31 +1969,14 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
         duration: 0,
       });
       const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY + 12) {
+      if (verifyHeadPx.y >= minY - 4) {
         break;
       }
-      let stepBoost = 28;
-      if (guard >= 3) stepBoost = 80;
-      else if (guard >= 1) stepBoost = 44;
+      const stepBoost = guard >= 2 ? 60 : 28;
       const safetyDeltaPx = minY - verifyHeadPx.y + stepBoost;
       const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
       adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
       resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
-    }
-
-    map.jumpTo({
-      center: [resultCenter.lon, resultCenter.lat],
-      bearing,
-      pitch,
-      zoom,
-      duration: 0,
-    });
-    const finalHeadPx = map.project([headPoint.lon, headPoint.lat]);
-    if (finalHeadPx.y < minY + 20) {
-      const requiredShiftPx = (minY + 40) - finalHeadPx.y;
-      const finalCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
-      const finalAdj = map.unproject([finalCenterPx.x, finalCenterPx.y + requiredShiftPx]);
-      resultCenter = { lon: finalAdj.lng, lat: finalAdj.lat };
     }
   }
 
