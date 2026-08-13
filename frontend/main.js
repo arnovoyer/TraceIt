@@ -233,9 +233,9 @@ function getActiveCameraConfig() {
     config.zoom += renderZoomOffset + extraPortraitBoost;
 
     if (formatKey === "portrait" && isAltitudeOverlayVisible) {
-      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.33);
+      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.36);
       config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.11);
-      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.715);
+      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.75);
       config.backOffsetM = Math.max(config.backOffsetM ?? 0, 82);
     }
   }
