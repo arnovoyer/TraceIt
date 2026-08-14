@@ -13,6 +13,7 @@ const altitudeToggleButton = document.getElementById("altitudeToggleButton");
 const photoInput = document.getElementById("photoInput");
 const durationInput = document.getElementById("durationInput");
 const formatSelect = document.getElementById("formatSelect");
+const showEndpointsToggle = document.getElementById("showEndpointsToggle");
 const mapFrame = document.getElementById("mapFrame");
 const altitudeOverlay = document.getElementById("altitudeOverlay");
 const altitudeAreaBg = document.getElementById("altitudeAreaBg");
@@ -54,6 +55,7 @@ let renderOutroState = null;
 let previewCanvasSize = { width: null, height: null };
 let renderZoomOffset = 0;
 let isAltitudeOverlayVisible = true;
+let showEndpoints = false;
 
 const MAX_ANIMATION_POINTS = 2500;
 const MAX_DENSE_POINTS = 9000;
@@ -252,11 +254,11 @@ function getActiveCameraConfig() {
     const extraPortraitBoost = formatKey === "portrait" ? 0.42 : 0;
     config.zoom += renderZoomOffset + extraPortraitBoost;
 
-    config.cinematicSideAmplitude = (config.cinematicSideAmplitude ?? 24) * 1.28;
-    config.cinematicBackAmplitude = (config.cinematicBackAmplitude ?? 20) * 1.22;
-    config.cinematicZoomAmplitude = (config.cinematicZoomAmplitude ?? 0.2) * 1.25;
-    config.cinematicPitchAmplitude = (config.cinematicPitchAmplitude ?? 3.5) * 1.2;
-    config.cinematicHeadBobAmountM = (config.cinematicHeadBobAmountM ?? 2) * 1.15;
+    config.cinematicSideAmplitude = (config.cinematicSideAmplitude ?? 24) * 1.08;
+    config.cinematicBackAmplitude = (config.cinematicBackAmplitude ?? 20) * 1.05;
+    config.cinematicZoomAmplitude = (config.cinematicZoomAmplitude ?? 0.2) * 1.08;
+    config.cinematicPitchAmplitude = (config.cinematicPitchAmplitude ?? 3.5) * 1.05;
+    config.cinematicHeadBobAmountM = (config.cinematicHeadBobAmountM ?? 2) * 1.05;
 
     if (formatKey === "portrait" && isAltitudeOverlayVisible) {
       config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.36);
@@ -281,9 +283,9 @@ function getRouteLineWidthExpression(stops, scale = 1) {
 }
 
 function syncRouteLineAppearance() {
-  const mainScale = isRenderMode ? 1.15 : 1;
-  const shadowScale = isRenderMode ? 1.18 : 1;
-  const headScale = isRenderMode ? 1.15 : 1;
+  const mainScale = isRenderMode ? 1.12 : 1;
+  const shadowScale = isRenderMode ? 1.15 : 1;
+  const headScale = isRenderMode ? 1.12 : 1;
   const endpointIconScale = isRenderMode ? 0.88 : 0.76;
   const highlightIconScale = isRenderMode ? 0.92 : 0.8;
   const photoIconScale = isRenderMode ? 0.86 : 0.74;
@@ -292,15 +294,7 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line-shadow",
       "line-width",
-      getRouteLineWidthExpression([12, 8, 14, 12, 16, 18, 18, 24], shadowScale)
-    );
-  }
-
-  if (map.getLayer("route-line-outline")) {
-    map.setPaintProperty(
-      "route-line-outline",
-      "line-width",
-      getRouteLineWidthExpression([12, 4, 14, 6.5, 16, 9, 18, 12.5], mainScale)
+      getRouteLineWidthExpression([12, 6, 14, 9, 16, 12, 18, 16], shadowScale)
     );
   }
 
@@ -308,36 +302,25 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line",
       "line-width",
-      getRouteLineWidthExpression([12, 2, 14, 3.5, 16, 5.5, 18, 8], mainScale)
+      getRouteLineWidthExpression([12, 3, 14, 5, 16, 7.5, 18, 11], mainScale)
     );
   }
 
-  if (map.getLayer("route-line-highlight")) {
-    map.setPaintProperty(
-      "route-line-highlight",
-      "line-width",
-      getRouteLineWidthExpression([12, 0.6, 14, 1, 16, 1.5, 18, 2.2], mainScale)
-    );
-  }
-
-  if (map.getLayer("route-head-main")) {
+  if (map.getLayer("route-head-circle")) {
     map.setLayoutProperty(
-      "route-head-main",
+      "route-head-circle",
       "icon-size",
-      (isRenderMode ? 0.68 : 0.6) * headScale
-    );
-  }
-
-  if (map.getLayer("route-head-dot")) {
-    map.setLayoutProperty(
-      "route-head-dot",
-      "icon-size",
-      (isRenderMode ? 0.4 : 0.35) * headScale
+      (isRenderMode ? 0.78 : 0.7) * headScale
     );
   }
 
   if (map.getLayer("routeEndpointsLayer")) {
     map.setLayoutProperty("routeEndpointsLayer", "icon-size", endpointIconScale);
+    map.setPaintProperty(
+      "routeEndpointsLayer",
+      "icon-opacity",
+      showEndpoints ? 1 : 0
+    );
   }
 
   if (map.getLayer("highlightPointsLayer")) {
@@ -575,28 +558,11 @@ function makeMarkerSvg(kind) {
     `;
   }
 
-  if (kind === "head-main") {
+  if (kind === "head-circle") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
-        <defs>
-          <filter id="headShadow" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.45"/>
-          </filter>
-        </defs>
-        <circle cx="28" cy="28" r="22" fill="#111827" filter="url(#headShadow)"/>
-        <circle cx="28" cy="28" r="18" fill="#FFFFFF"/>
-        <circle cx="28" cy="28" r="18" fill="none" stroke="#F59E0B" stroke-width="3"/>
-        <circle cx="28" cy="28" r="8" fill="#F59E0B"/>
-      </svg>
-    `;
-  }
-
-  if (kind === "head-dot") {
-    return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
-        <circle cx="10" cy="10" r="9" fill="#FFFFFF"/>
-        <circle cx="10" cy="10" r="9" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
-        <circle cx="10" cy="10" r="3.5" fill="#F59E0B"/>
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="12" fill="#000000" opacity="0.25"/>
+        <circle cx="12" cy="11" r="10" fill="#FFFFFF"/>
       </svg>
     `;
   }
@@ -622,8 +588,7 @@ async function ensureMarkerImages() {
     ["photo-spot", makeMarkerSvg("photo")],
     ["marker-start", makeMarkerSvg("start")],
     ["marker-target", makeMarkerSvg("target")],
-    ["route-head-main", makeMarkerSvg("head-main")],
-    ["route-head-dot", makeMarkerSvg("head-dot")],
+    ["route-head-circle", makeMarkerSvg("head-circle")],
   ];
 
   for (const [name, svg] of specs) {
@@ -668,27 +633,10 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#000000",
-        "line-opacity": 0.25,
-        "line-blur": 5,
-        "line-translate": [0, 5],
-        "line-width": getRouteLineWidthExpression([12, 8, 14, 12, 16, 18, 18, 24], 1),
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-outline")) {
-    map.addLayer({
-      id: "route-line-outline",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#111827",
-        "line-opacity": 0.9,
-        "line-width": getRouteLineWidthExpression([12, 4, 14, 6.5, 16, 9, 18, 12.5], 1),
+        "line-opacity": 0.2,
+        "line-blur": 3,
+        "line-translate": [0, 3],
+        "line-width": getRouteLineWidthExpression([12, 6, 14, 9, 16, 12, 18, 16], 1),
       },
     });
   }
@@ -703,34 +651,9 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#F59E0B",
+        "line-color": "#FFD600",
         "line-opacity": 1,
-        "line-width": getRouteLineWidthExpression([12, 2, 14, 3.5, 16, 5.5, 18, 8], 1),
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-highlight")) {
-    map.addLayer({
-      id: "route-line-highlight",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FDE68A",
-        "line-opacity": [
-          "interpolate",
-          ["linear"],
-          ["line-progress"],
-          0, 0.9,
-          0.7, 0.7,
-          1, 0.35,
-        ],
-        "line-width": getRouteLineWidthExpression([12, 0.6, 14, 1, 16, 1.5, 18, 2.2], 1),
-        "line-translate": [-0.5, -0.8],
+        "line-width": getRouteLineWidthExpression([12, 3, 14, 5, 16, 7.5, 18, 11], 1),
       },
     });
   }
@@ -813,31 +736,14 @@ function ensureMarkerLayers() {
     });
   }
 
-  if (!map.getLayer("route-head-main")) {
+  if (!map.getLayer("route-head-circle")) {
     map.addLayer({
-      id: "route-head-main",
+      id: "route-head-circle",
       type: "symbol",
       source: "routeHead",
       layout: {
-        "icon-image": "route-head-main",
-        "icon-size": 0.6,
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
-        "icon-anchor": "center",
-        "icon-pitch-alignment": "viewport",
-        "icon-rotation-alignment": "viewport",
-      },
-    });
-  }
-
-  if (!map.getLayer("route-head-dot")) {
-    map.addLayer({
-      id: "route-head-dot",
-      type: "symbol",
-      source: "routeHead",
-      layout: {
-        "icon-image": "route-head-dot",
-        "icon-size": 0.35,
+        "icon-image": "route-head-circle",
+        "icon-size": 0.7,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "center",
@@ -2187,12 +2093,13 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 function clearExistingRoute() {
   clearInsightMarkers();
 
-  if (map.getLayer("route-head-dot")) map.removeLayer("route-head-dot");
-  if (map.getLayer("route-head-main")) map.removeLayer("route-head-main");
-  if (map.getLayer("route-line-highlight")) map.removeLayer("route-line-highlight");
+  if (map.getLayer("route-head-circle")) map.removeLayer("route-head-circle");
   if (map.getLayer("route-line")) map.removeLayer("route-line");
-  if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
   if (map.getLayer("route-line-shadow")) map.removeLayer("route-line-shadow");
+  if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
+  if (map.getLayer("route-line-highlight")) map.removeLayer("route-line-highlight");
+  if (map.getLayer("route-head-main")) map.removeLayer("route-head-main");
+  if (map.getLayer("route-head-dot")) map.removeLayer("route-head-dot");
 
   if (map.getSource("routeHead")) {
     map.removeSource("routeHead");
@@ -2936,6 +2843,12 @@ altitudeToggleButton?.addEventListener("click", () => {
   setStatus(`Hoehenprofil ${visible ? "eingeblendet" : "ausgeblendet"}.`);
 });
 
+showEndpointsToggle?.addEventListener("change", async () => {
+  showEndpoints = Boolean(showEndpointsToggle.checked);
+  syncMarkerLayers();
+  setStatus(`Start/Ziel Marker ${showEndpoints ? "eingeblendet" : "ausgeblendet"}.`);
+});
+
 photoInput.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   if (!file) {
@@ -3147,6 +3060,9 @@ function setProgress(progress) {
 }
 
 applySelectedFormat();
+if (showEndpointsToggle) {
+  showEndpointsToggle.checked = showEndpoints;
+}
 
 window.gpxOverlay = {
   applyFormat: (formatKey) => {
@@ -3173,6 +3089,14 @@ window.gpxOverlay = {
   },
   setAltitudeOverlayVisible: (visible, persist = false) => {
     return setAltitudeOverlayVisible(visible, { persist });
+  },
+  setEndpointsVisible: (visible) => {
+    showEndpoints = Boolean(visible);
+    if (showEndpointsToggle) {
+      showEndpointsToggle.checked = showEndpoints;
+    }
+    syncRouteLineAppearance();
+    return showEndpoints;
   },
   setOutroProgress,
   getRenderedRouteProgress,

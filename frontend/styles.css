@@ -56,6 +56,7 @@ body {
 }
 
 .file-input-label,
+.checkbox-label,
 button {
   border: 1.5px solid rgba(251, 191, 36, 0.25);
   background: linear-gradient(135deg, #1a3f5a 0%, #15324a 100%);
@@ -68,7 +69,21 @@ button {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .file-input-label:hover,
+.checkbox-label:hover,
 button:hover:not(:disabled) {
   border-color: var(--accent);
   background: linear-gradient(135deg, #1f5576 0%, #1a4563 100%);
@@ -77,6 +92,7 @@ button:hover:not(:disabled) {
 }
 
 .file-input-label:active,
+.checkbox-label:active,
 button:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(251, 191, 36, 0.1);
