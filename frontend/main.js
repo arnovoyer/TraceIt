@@ -250,6 +250,9 @@ function getSelectedFormatKey() {
 function getActiveCameraConfig() {
   const formatKey = getSelectedFormatKey();
   const config = { ...CAMERA_CONFIG, ...(FORMAT_CAMERA_OVERRIDES[formatKey] || {}) };
+
+  const isPortraitAltitude = formatKey === "portrait" && isAltitudeOverlayVisible;
+
   if (isRenderMode) {
     const extraPortraitBoost = formatKey === "portrait" ? 0.42 : 0;
     config.zoom += renderZoomOffset + extraPortraitBoost;
@@ -259,12 +262,15 @@ function getActiveCameraConfig() {
     config.cinematicZoomAmplitude = (config.cinematicZoomAmplitude ?? 0.2) * 1.08;
     config.cinematicPitchAmplitude = (config.cinematicPitchAmplitude ?? 3.5) * 1.05;
     config.cinematicHeadBobAmountM = (config.cinematicHeadBobAmountM ?? 2) * 1.05;
+  }
 
-    if (formatKey === "portrait" && isAltitudeOverlayVisible) {
-      config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.36);
-      config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.11);
-      config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.75);
-      config.backOffsetM = Math.max(config.backOffsetM ?? 0, 82);
+  if (isPortraitAltitude) {
+    config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.38);
+    config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.12);
+    config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.78);
+    config.backOffsetM = Math.max(config.backOffsetM ?? 0, 92);
+    if (isRenderMode) {
+      config.zoom += 0.12;
     }
   }
   return config;
@@ -1996,16 +2002,16 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let anchorX = cfg.headAnchorX ?? 0.5;
   let anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
 
-  const needsHardAltitudeSafeY = isRenderMode && isPortrait && isAltitudeOverlayVisible;
+  const needsHardAltitudeSafeY = isPortrait && isAltitudeOverlayVisible;
   if (needsHardAltitudeSafeY) {
-    marginTop = Math.max(marginTop, 0.36);
-    anchorY = Math.max(anchorY, 0.75);
-    marginX = Math.max(marginX, 0.11);
+    marginTop = Math.max(marginTop, 0.38);
+    anchorY = Math.max(anchorY, 0.78);
+    marginX = Math.max(marginX, 0.12);
   }
 
-  let pullStrength = isPortrait ? 0.19 : 0.08;
+  let pullStrength = isPortrait ? 0.26 : 0.1;
   if (needsHardAltitudeSafeY) {
-    pullStrength = 0.34;
+    pullStrength = 0.52;
   }
 
   map.jumpTo({
@@ -2022,7 +2028,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   let minY = h * marginTop;
   if (needsHardAltitudeSafeY) {
-    minY = getAltitudeOverlaySafeBottomPx(canvas);
+    minY = getAltitudeOverlaySafeBottomPx(canvas) + 28;
   }
 
   const minX = w * marginX;
@@ -2045,14 +2051,14 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   if (headPx.y < minY) {
     dy = headPx.y - minY;
     if (needsHardAltitudeSafeY) {
-      dy -= 10;
+      dy -= 32;
     }
   } else if (headPx.y > maxY) {
     dy = headPx.y - maxY;
   } else {
-    if (needsHardAltitudeSafeY && headPx.y < minY + 50) {
-      const t = 1 - Math.max(0, (headPx.y - minY) / 50);
-      dy = (headPx.y - targetY) * pullStrength - t * 16;
+    if (needsHardAltitudeSafeY && headPx.y < minY + 90) {
+      const t = 1 - Math.max(0, (headPx.y - minY) / 90);
+      dy = (headPx.y - targetY) * pullStrength - t * 48;
     } else {
       dy = (headPx.y - targetY) * pullStrength;
     }
@@ -2067,7 +2073,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
 
   if (needsHardAltitudeSafeY) {
-    for (let guard = 0; guard < 5; guard += 1) {
+    for (let guard = 0; guard < 7; guard += 1) {
       map.jumpTo({
         center: [resultCenter.lon, resultCenter.lat],
         bearing,
@@ -2076,10 +2082,10 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
         duration: 0,
       });
       const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY + 10) {
+      if (verifyHeadPx.y >= minY + 14) {
         break;
       }
-      const stepBoost = guard >= 2 ? 60 : 42;
+      const stepBoost = guard >= 3 ? 80 : 52;
       const safetyDeltaPx = minY - verifyHeadPx.y + stepBoost;
       const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
       adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
@@ -2409,11 +2415,19 @@ function startAnimation() {
         const targetZoom = cfg.zoom + cinematic.zoom;
         const targetPitch = cfg.pitch + cinematic.pitch;
 
+        const isPortraitAltitude = getSelectedFormatKey() === "portrait" && isAltitudeOverlayVisible;
+        const initialBoost = progress < 0.18 ? 1.75 : 1;
+        const centerSmoothBoost = isPortraitAltitude ? 2.4 * initialBoost : 1;
+        const zoomPitchSmoothBoost = isPortraitAltitude ? 1.9 * initialBoost : 1;
+
+        const effectiveCenterSmoothing = Math.min(0.75, cfg.centerSmoothing * centerSmoothBoost);
+        const effectiveZoomPitchSmoothing = Math.min(0.65, cfg.centerSmoothing * 1.4 * zoomPitchSmoothBoost);
+
         if (smoothedZoom === null || !Number.isFinite(smoothedZoom)) smoothedZoom = targetZoom;
-        else smoothedZoom = lerp(smoothedZoom, targetZoom, cfg.centerSmoothing * 1.4);
+        else smoothedZoom = lerp(smoothedZoom, targetZoom, effectiveZoomPitchSmoothing);
 
         if (smoothedPitch === null || !Number.isFinite(smoothedPitch)) smoothedPitch = targetPitch;
-        else smoothedPitch = lerp(smoothedPitch, targetPitch, cfg.centerSmoothing * 1.4);
+        else smoothedPitch = lerp(smoothedPitch, targetPitch, effectiveZoomPitchSmoothing);
 
         const routeHeadWithBob = {
           lon: smoothRoute.lon,
@@ -2439,8 +2453,8 @@ function startAnimation() {
           smoothedCenter = offsetCenter;
         } else {
           smoothedCenter = {
-            lon: lerp(smoothedCenter.lon, offsetCenter.lon, cfg.centerSmoothing),
-            lat: lerp(smoothedCenter.lat, offsetCenter.lat, cfg.centerSmoothing),
+            lon: lerp(smoothedCenter.lon, offsetCenter.lon, effectiveCenterSmoothing),
+            lat: lerp(smoothedCenter.lat, offsetCenter.lat, effectiveCenterSmoothing),
           };
         }
 
@@ -2997,13 +3011,21 @@ function setProgress(progress) {
   const targetZoom = cfg.zoom + cinematic.zoom;
   const targetPitch = cfg.pitch + cinematic.pitch;
 
+  const isPortraitAltitude = getSelectedFormatKey() === "portrait" && isAltitudeOverlayVisible;
+  const initialBoost = clampedProgress < 0.18 ? 1.75 : 1;
+  const centerSmoothBoost = isPortraitAltitude ? 2.4 * initialBoost : 1;
+  const zoomPitchSmoothBoost = isPortraitAltitude ? 1.9 * initialBoost : 1;
+
+  const effectiveCenterSmoothing = Math.min(0.75, cfg.centerSmoothing * centerSmoothBoost);
+  const effectiveZoomPitchSmoothing = Math.min(0.65, cfg.centerSmoothing * 1.4 * zoomPitchSmoothBoost);
+
   let smoothedZoom = renderCameraState.smoothedZoom;
   if (smoothedZoom === null || !Number.isFinite(smoothedZoom)) smoothedZoom = targetZoom;
-  else smoothedZoom = lerp(smoothedZoom, targetZoom, cfg.centerSmoothing * 1.4);
+  else smoothedZoom = lerp(smoothedZoom, targetZoom, effectiveZoomPitchSmoothing);
 
   let smoothedPitch = renderCameraState.smoothedPitch;
   if (smoothedPitch === null || !Number.isFinite(smoothedPitch)) smoothedPitch = targetPitch;
-  else smoothedPitch = lerp(smoothedPitch, targetPitch, cfg.centerSmoothing * 1.4);
+  else smoothedPitch = lerp(smoothedPitch, targetPitch, effectiveZoomPitchSmoothing);
 
   const routeHeadWithBob = {
     lon: smoothRoute.lon,
@@ -3031,8 +3053,8 @@ function setProgress(progress) {
     smoothedCenter = offsetCenter;
   } else {
     smoothedCenter = {
-      lon: lerp(smoothedCenter.lon, offsetCenter.lon, cfg.centerSmoothing),
-      lat: lerp(smoothedCenter.lat, offsetCenter.lat, cfg.centerSmoothing),
+      lon: lerp(smoothedCenter.lon, offsetCenter.lon, effectiveCenterSmoothing),
+      lat: lerp(smoothedCenter.lat, offsetCenter.lat, effectiveCenterSmoothing),
     };
   }
 
