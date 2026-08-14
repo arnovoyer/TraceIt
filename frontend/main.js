@@ -127,18 +127,18 @@ const FORMAT_CAMERA_OVERRIDES = {
     cinematicHeadBobAmountM: 2.5,
   },
   portrait: {
-    sideOffsetM: 32,
-    backOffsetM: 62,
+    sideOffsetM: 24,
+    backOffsetM: 44,
     zoom: 15.1,
     pitch: 59,
-    lookAheadPoints: 125,
-    focusAheadPoints: 62,
+    lookAheadPoints: 72,
+    focusAheadPoints: 32,
     bearingWindow: 30,
     maxBearingSpeedDegPerSec: 9,
     bearingSmoothing: 0.015,
     centerSmoothing: 0.015,
     headAnchorX: 0.5,
-    headAnchorY: 0.63,
+    headAnchorY: 0.54,
     viewportMarginX: 0.08,
     viewportMarginTop: 0.06,
     viewportMarginBottom: 0.05,
@@ -267,8 +267,10 @@ function getActiveCameraConfig() {
   if (isPortraitAltitude) {
     config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.38);
     config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.12);
-    config.headAnchorY = Math.max(config.headAnchorY ?? 0, 0.78);
-    config.backOffsetM = Math.max(config.backOffsetM ?? 0, 92);
+    config.headAnchorY = 0.56;
+    config.backOffsetM = Math.max(config.backOffsetM ?? 0, 64);
+    config.lookAheadPoints = Math.min(config.lookAheadPoints ?? 999, 56);
+    config.focusAheadPoints = Math.min(config.focusAheadPoints ?? 999, 22);
     if (isRenderMode) {
       config.zoom += 0.12;
     }
@@ -2004,8 +2006,8 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   const needsHardAltitudeSafeY = isPortrait && isAltitudeOverlayVisible;
   if (needsHardAltitudeSafeY) {
-    marginTop = Math.max(marginTop, 0.38);
-    anchorY = Math.max(anchorY, 0.78);
+    marginTop = Math.max(marginTop, 0.36);
+    anchorY = 0.56;
     marginX = Math.max(marginX, 0.12);
   }
 
@@ -2255,7 +2257,7 @@ async function applyParsedGpxData(data) {
   }
 
   updateInsightsPanel();
-  renderAltitudeOverlay(sampledPoints);
+  renderAltitudeOverlay(routePoints);
 
   if (!map.isStyleLoaded()) {
     await new Promise((resolve) => map.once("load", resolve));
