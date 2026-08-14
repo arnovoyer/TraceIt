@@ -283,9 +283,9 @@ function getRouteLineWidthExpression(stops, scale = 1) {
 }
 
 function syncRouteLineAppearance() {
-  const mainScale = isRenderMode ? 1.12 : 1;
-  const shadowScale = isRenderMode ? 1.15 : 1;
-  const headScale = isRenderMode ? 1.12 : 1;
+  const mainScale = isRenderMode ? 1.1 : 1;
+  const shadowScale = isRenderMode ? 1.12 : 1;
+  const headScale = isRenderMode ? 1.1 : 1;
   const endpointIconScale = isRenderMode ? 0.88 : 0.76;
   const highlightIconScale = isRenderMode ? 0.92 : 0.8;
   const photoIconScale = isRenderMode ? 0.86 : 0.74;
@@ -294,7 +294,7 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line-shadow",
       "line-width",
-      getRouteLineWidthExpression([12, 6, 14, 9, 16, 12, 18, 16], shadowScale)
+      getRouteLineWidthExpression([12, 4, 14, 5.5, 16, 7, 18, 9], shadowScale)
     );
   }
 
@@ -302,7 +302,7 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line",
       "line-width",
-      getRouteLineWidthExpression([12, 3, 14, 5, 16, 7.5, 18, 11], mainScale)
+      getRouteLineWidthExpression([12, 1.6, 14, 2.6, 16, 4, 18, 5.8], mainScale)
     );
   }
 
@@ -634,9 +634,9 @@ function ensureMarkerLayers() {
       paint: {
         "line-color": "#000000",
         "line-opacity": 0.2,
-        "line-blur": 3,
-        "line-translate": [0, 3],
-        "line-width": getRouteLineWidthExpression([12, 6, 14, 9, 16, 12, 18, 16], 1),
+        "line-blur": 2,
+        "line-translate": [0, 2],
+        "line-width": getRouteLineWidthExpression([12, 4, 14, 5.5, 16, 7, 18, 9], 1),
       },
     });
   }
@@ -651,9 +651,9 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FFD600",
+        "line-color": "#FACC15",
         "line-opacity": 1,
-        "line-width": getRouteLineWidthExpression([12, 3, 14, 5, 16, 7.5, 18, 11], 1),
+        "line-width": getRouteLineWidthExpression([12, 1.6, 14, 2.6, 16, 4, 18, 5.8], 1),
       },
     });
   }
@@ -1638,7 +1638,7 @@ function sanitizeAndSamplePoints(points) {
   return sampled;
 }
 
-function smoothRoutePoints(points, windowSize = 12) {
+function smoothRoutePoints(points, windowSize = 20) {
   if (points.length < 3) {
     return points;
   }
@@ -1646,7 +1646,7 @@ function smoothRoutePoints(points, windowSize = 12) {
   let currentPoints = [...points];
   
   // Apply smoothing multiple times for ultra-smooth result
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 5; pass++) {
     const smoothed = [];
     for (let i = 0; i < currentPoints.length; i += 1) {
       const start = Math.max(0, i - windowSize);
@@ -2329,7 +2329,6 @@ function startAnimation() {
         virtualElapsed += dtMs * speedFactor;
 
         const progress = timedOut ? 1 : Math.min(1, Math.max(0, virtualElapsed / durationMs));
-        updateAltitudeOverlayProgress(progress);
 
         const scaled = progress * segmentCount;
         const segmentIndex = Math.min(segmentCount - 1, Math.floor(scaled));
@@ -2355,6 +2354,12 @@ function startAnimation() {
           cameraAlpha = localT * slopeFactor;
           routeAlpha = localT * slopeFactor;
         }
+
+        const effectiveProgress = Math.min(
+          1,
+          Math.max(0, (segmentIndex + routeAlpha) / Math.max(1, segmentCount))
+        );
+        updateAltitudeOverlayProgress(effectiveProgress);
 
         const smoothCam = interpolatePoint(
           activePoints[segmentIndex],
