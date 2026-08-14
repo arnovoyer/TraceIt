@@ -47,6 +47,8 @@ let renderCameraState = {
   lastProgress: null,
   smoothedBearing: null,
   smoothedCenter: null,
+  smoothedZoom: null,
+  smoothedPitch: null,
 };
 let renderOutroState = null;
 let previewCanvasSize = { width: null, height: null };
@@ -79,19 +81,25 @@ const ALTITUDE_VISIBILITY_STORAGE_KEY = "traceit.altitudeOverlayVisible";
 isAltitudeOverlayVisible = loadAltitudeOverlayPreference();
 
 const CAMERA_CONFIG = {
-  pitch: 60, // Less steep
+  pitch: 60,
   zoom: 15.3,
   sideOffsetM: 40,
   backOffsetM: 60,
-  centerSmoothing: 0.015, // Even more ultra smooth drone-like
-  bearingSmoothing: 0.015, // Even more ultra smooth drone-like
-  lookAheadPoints: 120, // Look way further ahead
+  centerSmoothing: 0.015,
+  bearingSmoothing: 0.015,
+  lookAheadPoints: 120,
   focusAheadPoints: 60,
-  bearingWindow: 30, // Larger window for bearing calculation
-  maxBearingSpeedDegPerSec: 10, // Very slow, controlled turn speed
+  bearingWindow: 30,
+  maxBearingSpeedDegPerSec: 10,
   outroPitch: 16,
   outroBearing: 0,
   outroPadding: 68,
+  cinematicCycleDuration: 18000,
+  cinematicSideAmplitude: 28,
+  cinematicBackAmplitude: 22,
+  cinematicZoomAmplitude: 0.22,
+  cinematicPitchAmplitude: 4,
+  cinematicHeadBobAmountM: 2.5,
 };
 
 const FORMAT_CAMERA_OVERRIDES = {
@@ -106,9 +114,15 @@ const FORMAT_CAMERA_OVERRIDES = {
     centerSmoothing: 0.015,
     maxBearingSpeedDegPerSec: 10,
     headAnchorX: 0.5,
-    headAnchorY: 0.62, // Higher
+    headAnchorY: 0.62,
     outroPitch: 16,
     outroPadding: 68,
+    cinematicCycleDuration: 18000,
+    cinematicSideAmplitude: 30,
+    cinematicBackAmplitude: 24,
+    cinematicZoomAmplitude: 0.24,
+    cinematicPitchAmplitude: 4.5,
+    cinematicHeadBobAmountM: 2.5,
   },
   portrait: {
     sideOffsetM: 32,
@@ -122,7 +136,7 @@ const FORMAT_CAMERA_OVERRIDES = {
     bearingSmoothing: 0.015,
     centerSmoothing: 0.015,
     headAnchorX: 0.5,
-    headAnchorY: 0.63, // Higher up, not too low
+    headAnchorY: 0.63,
     viewportMarginX: 0.08,
     viewportMarginTop: 0.06,
     viewportMarginBottom: 0.05,
@@ -133,6 +147,12 @@ const FORMAT_CAMERA_OVERRIDES = {
       left: 58,
       right: 58,
     },
+    cinematicCycleDuration: 19000,
+    cinematicSideAmplitude: 24,
+    cinematicBackAmplitude: 26,
+    cinematicZoomAmplitude: 0.2,
+    cinematicPitchAmplitude: 3.5,
+    cinematicHeadBobAmountM: 2.2,
   },
 };
 
@@ -255,9 +275,27 @@ function getRouteLineWidthExpression(stops, scale = 1) {
 }
 
 function syncRouteLineAppearance() {
-  const mainScale = isRenderMode ? 1.18 : 1;
-  const glowScale = isRenderMode ? 1.12 : 1;
-  const edgeScale = isRenderMode ? 1.15 : 1;
+  const mainScale = isRenderMode ? 1.28 : 1;
+  const glowScale = isRenderMode ? 1.24 : 1;
+  const edgeScale = isRenderMode ? 1.22 : 1;
+  const shadowScale = isRenderMode ? 1.35 : 1.1;
+  const headGlowScale = isRenderMode ? 1.45 : 1.2;
+
+  if (map.getLayer("route-line-shadow")) {
+    map.setPaintProperty(
+      "route-line-shadow",
+      "line-width",
+      getRouteLineWidthExpression([12, 10, 14, 16, 16, 24, 18, 32], shadowScale)
+    );
+  }
+
+  if (map.getLayer("route-line-glow-outer")) {
+    map.setPaintProperty(
+      "route-line-glow-outer",
+      "line-width",
+      getRouteLineWidthExpression([12, 9, 14, 14, 16, 22, 18, 30], glowScale * 1.1)
+    );
+  }
 
   if (map.getLayer("route-line-glow")) {
     map.setPaintProperty(
@@ -267,11 +305,27 @@ function syncRouteLineAppearance() {
     );
   }
 
+  if (map.getLayer("route-line-glow-inner")) {
+    map.setPaintProperty(
+      "route-line-glow-inner",
+      "line-width",
+      getRouteLineWidthExpression([12, 3.5, 14, 6, 16, 9, 18, 13], glowScale * 0.95)
+    );
+  }
+
   if (map.getLayer("route-line")) {
     map.setPaintProperty(
       "route-line",
       "line-width",
-      getRouteLineWidthExpression([12, 2.5, 14, 4, 16, 6, 18, 8.5], mainScale)
+      getRouteLineWidthExpression([12, 2.8, 14, 4.4, 16, 6.6, 18, 9.2], mainScale)
+    );
+  }
+
+  if (map.getLayer("route-line-highlight")) {
+    map.setPaintProperty(
+      "route-line-highlight",
+      "line-width",
+      getRouteLineWidthExpression([12, 1, 14, 1.5, 16, 2.2, 18, 3], mainScale * 0.85)
     );
   }
 
@@ -279,7 +333,31 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line-edge",
       "line-width",
-      getRouteLineWidthExpression([12, 0.8, 14, 1.2, 16, 1.8, 18, 2.5], edgeScale)
+      getRouteLineWidthExpression([12, 1, 14, 1.4, 16, 2, 18, 2.8], edgeScale)
+    );
+  }
+
+  if (map.getLayer("route-head-glow")) {
+    map.setLayoutProperty(
+      "route-head-glow",
+      "icon-size",
+      (isRenderMode ? 1.15 : 0.95) * headGlowScale
+    );
+  }
+
+  if (map.getLayer("route-head-core")) {
+    map.setLayoutProperty(
+      "route-head-core",
+      "icon-size",
+      (isRenderMode ? 0.85 : 0.7) * headGlowScale
+    );
+  }
+
+  if (map.getLayer("route-head-spark")) {
+    map.setLayoutProperty(
+      "route-head-spark",
+      "icon-size",
+      (isRenderMode ? 0.45 : 0.38) * headGlowScale
     );
   }
 }
@@ -430,89 +508,212 @@ function createSvgDataUrl(svg) {
 function makeMarkerSvg(kind) {
   if (kind === "photo") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
+      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
         <defs>
-          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="photoPinGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stop-color="#ffffff"/>
-            <stop offset="100%" stop-color="#f8fafc"/>
+            <stop offset="100%" stop-color="#e5e7eb"/>
           </linearGradient>
+          <filter id="photoDropShadow" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+          </filter>
+          <filter id="photoSoftGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.2" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
         </defs>
-        <circle cx="32" cy="30" r="20" fill="#facc15"/>
-        <circle cx="32" cy="30" r="14" fill="url(#g)"/>
-        <path d="M32 58 L23 41 H41 Z" fill="#facc15"/>
-        <rect x="22" y="22" width="20" height="14" rx="2.5" fill="#6b7280"/>
-        <circle cx="32" cy="29" r="5" fill="#d1d5db"/>
+        <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
+        <circle cx="40" cy="38" r="22" fill="url(#photoPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#photoDropShadow)"/>
+        <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
+        <rect x="26" y="26" width="28" height="20" rx="3.5" fill="#374151"/>
+        <rect x="28" y="28" width="24" height="16" rx="2.5" fill="#6b7280"/>
+        <circle cx="40" cy="36" r="6.5" fill="#1f2937" stroke="#9ca3af" stroke-width="1.2"/>
+        <circle cx="40" cy="36" r="3.2" fill="#e5e7eb" filter="url(#photoSoftGlow)"/>
       </svg>
     `;
   }
 
   if (kind === "speed") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
-        <circle cx="32" cy="30" r="20" fill="#facc15"/>
-        <circle cx="32" cy="30" r="14" fill="#ffffff"/>
-        <path d="M32 58 L23 41 H41 Z" fill="#facc15"/>
-        <path d="M27 34 L31 27 L29 27 L33 21 L32 29 L35 29 Z" fill="#1f2937"/>
+      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+        <defs>
+          <linearGradient id="speedPinGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#f1f5f9"/>
+          </linearGradient>
+          <filter id="speedDropShadow" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+          </filter>
+        </defs>
+        <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
+        <circle cx="40" cy="38" r="22" fill="url(#speedPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#speedDropShadow)"/>
+        <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
+        <path d="M33 44 L39 30 L35 30 L41 18 L39 30 L44 30 Z" fill="#111827" stroke="#f97316" stroke-width="0.8" stroke-linejoin="round"/>
+      </svg>
+    `;
+  }
+
+  if (kind === "elevation") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+        <defs>
+          <linearGradient id="elevPinGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#f1f5f9"/>
+          </linearGradient>
+          <filter id="elevDropShadow" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+          </filter>
+        </defs>
+        <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
+        <circle cx="40" cy="38" r="22" fill="url(#elevPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#elevDropShadow)"/>
+        <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
+        <path d="M29 44 L36 30 L41 37 L47 24 L51 44 Z" fill="#111827" stroke="#059669" stroke-width="0.8" stroke-linejoin="round"/>
       </svg>
     `;
   }
 
   if (kind === "start") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="100" viewBox="0 0 80 100">
+      <svg xmlns="http://www.w3.org/2000/svg" width="100" height="128" viewBox="0 0 100 128">
         <defs>
-          <linearGradient id="startGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#FFD600"/>
-            <stop offset="100%" stop-color="#FFB300"/>
+          <linearGradient id="startMainGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFE066"/>
+            <stop offset="45%" stop-color="#FFC400"/>
+            <stop offset="100%" stop-color="#FF9800"/>
           </linearGradient>
-          <radialGradient id="startGlow" cx="50%" cy="40%" r="50%">
-            <stop offset="0%" stop-color="#FFEB3B" stop-opacity="0.8"/>
-            <stop offset="100%" stop-color="#FFD600" stop-opacity="0"/>
+          <radialGradient id="startOuterGlow" cx="50%" cy="38%" r="55%">
+            <stop offset="0%" stop-color="#FFEB3B" stop-opacity="0.7"/>
+            <stop offset="55%" stop-color="#FFC107" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#FFC107" stop-opacity="0"/>
           </radialGradient>
-          <filter id="startShadow" x="-100%" y="-100%" width="300%" height="300%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#FFC107" flood-opacity="0.5"/>
+          <radialGradient id="startInnerHalo" cx="50%" cy="40%" r="45%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+            <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="startStrongShadow" x="-100%" y="-100%" width="300%" height="300%">
+            <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#E65100" flood-opacity="0.55"/>
+          </filter>
+          <filter id="startPinBlur" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="1.2"/>
           </filter>
         </defs>
-        <circle cx="40" cy="38" r="28" fill="url(#startGlow)"/>
-        <circle cx="40" cy="38" r="20" fill="url(#startGrad)" stroke="#FFFFFF" stroke-width="3" filter="url(#startShadow)"/>
-        <circle cx="40" cy="38" r="12" fill="#FFFFFF"/>
-        <text x="40" y="44" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#FF8F00">S</text>
-        <path d="M40 68 L27 46 H53 Z" fill="url(#startGrad)" stroke="#FFFFFF" stroke-width="2"/>
+        <circle cx="50" cy="48" r="40" fill="url(#startOuterGlow)"/>
+        <circle cx="50" cy="48" r="30" fill="url(#startInnerHalo)"/>
+        <circle cx="50" cy="48" r="24" fill="url(#startMainGrad)" stroke="#FFFFFF" stroke-width="4" filter="url(#startStrongShadow)"/>
+        <circle cx="50" cy="42" r="9" fill="#FFFFFF" opacity="0.55" filter="url(#startPinBlur)"/>
+        <circle cx="50" cy="48" r="14" fill="#FFFFFF"/>
+        <text x="50" y="54" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="900" fill="#EF6C00">S</text>
+        <path d="M50 90 L32 58 H68 Z" fill="url(#startMainGrad)" stroke="#FFFFFF" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M50 82 L39 62 H61 Z" fill="#FFE082" opacity="0.35"/>
       </svg>
     `;
   }
 
   if (kind === "target") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="100" viewBox="0 0 80 100">
+      <svg xmlns="http://www.w3.org/2000/svg" width="100" height="128" viewBox="0 0 100 128">
         <defs>
-          <linearGradient id="targetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#FF5252"/>
-            <stop offset="100%" stop-color="#D32F2F"/>
+          <linearGradient id="targetMainGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FF6E6E"/>
+            <stop offset="45%" stop-color="#FF3030"/>
+            <stop offset="100%" stop-color="#C62828"/>
           </linearGradient>
-          <radialGradient id="targetGlow" cx="50%" cy="40%" r="50%">
-            <stop offset="0%" stop-color="#FF8A80" stop-opacity="0.8"/>
-            <stop offset="100%" stop-color="#FF5252" stop-opacity="0"/>
+          <radialGradient id="targetOuterGlow" cx="50%" cy="38%" r="55%">
+            <stop offset="0%" stop-color="#FF5252" stop-opacity="0.65"/>
+            <stop offset="55%" stop-color="#F44336" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="#F44336" stop-opacity="0"/>
           </radialGradient>
-          <filter id="targetShadow" x="-100%" y="-100%" width="300%" height="300%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#F44336" flood-opacity="0.5"/>
+          <radialGradient id="targetInnerHalo" cx="50%" cy="40%" r="45%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+            <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0"/>
+          </radialGradient>
+          <filter id="targetStrongShadow" x="-100%" y="-100%" width="300%" height="300%">
+            <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#B71C1C" flood-opacity="0.55"/>
+          </filter>
+          <filter id="targetPinBlur" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="1.2"/>
           </filter>
         </defs>
-        <circle cx="40" cy="38" r="28" fill="url(#targetGlow)"/>
-        <circle cx="40" cy="38" r="20" fill="url(#targetGrad)" stroke="#FFFFFF" stroke-width="3" filter="url(#targetShadow)"/>
-        <circle cx="40" cy="38" r="12" fill="#FFFFFF"/>
-        <text x="40" y="44" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#C62828">Z</text>
-        <path d="M40 68 L27 46 H53 Z" fill="url(#targetGrad)" stroke="#FFFFFF" stroke-width="2"/>
+        <circle cx="50" cy="48" r="40" fill="url(#targetOuterGlow)"/>
+        <circle cx="50" cy="48" r="30" fill="url(#targetInnerHalo)"/>
+        <circle cx="50" cy="48" r="24" fill="url(#targetMainGrad)" stroke="#FFFFFF" stroke-width="4" filter="url(#targetStrongShadow)"/>
+        <circle cx="50" cy="42" r="9" fill="#FFFFFF" opacity="0.55" filter="url(#targetPinBlur)"/>
+        <circle cx="50" cy="48" r="14" fill="#FFFFFF"/>
+        <text x="50" y="54" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="900" fill="#B71C1C">Z</text>
+        <path d="M50 90 L32 58 H68 Z" fill="url(#targetMainGrad)" stroke="#FFFFFF" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M50 82 L39 62 H61 Z" fill="#FFCDD2" opacity="0.35"/>
+      </svg>
+    `;
+  }
+
+  if (kind === "head-glow") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+        <defs>
+          <radialGradient id="headGlowGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFEB3B" stop-opacity="0.85"/>
+            <stop offset="25%" stop-color="#FFC400" stop-opacity="0.55"/>
+            <stop offset="55%" stop-color="#FF9800" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="#FF6F00" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="80" cy="80" r="78" fill="url(#headGlowGrad)"/>
+      </svg>
+    `;
+  }
+
+  if (kind === "head-core") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
+        <defs>
+          <linearGradient id="headCoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="35%" stop-color="#FFE082"/>
+            <stop offset="75%" stop-color="#FFC400"/>
+            <stop offset="100%" stop-color="#FF8F00"/>
+          </linearGradient>
+          <filter id="headCoreShadow" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#E65100" flood-opacity="0.55"/>
+          </filter>
+        </defs>
+        <circle cx="40" cy="40" r="26" fill="#FFFFFF" opacity="0.22"/>
+        <circle cx="40" cy="40" r="20" fill="url(#headCoreGrad)" stroke="#FFFFFF" stroke-width="3.2" filter="url(#headCoreShadow)"/>
+        <circle cx="34" cy="33" r="6" fill="#FFFFFF" opacity="0.75"/>
+      </svg>
+    `;
+  }
+
+  if (kind === "head-spark") {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+        <defs>
+          <radialGradient id="sparkGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+            <stop offset="60%" stop-color="#FFF9C4" stop-opacity="0.85"/>
+            <stop offset="100%" stop-color="#FFE082" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="20" cy="20" r="19" fill="url(#sparkGrad)"/>
       </svg>
     `;
   }
 
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="84" viewBox="0 0 64 84">
-      <circle cx="32" cy="30" r="20" fill="#facc15"/>
-      <circle cx="32" cy="30" r="14" fill="#ffffff"/>
-      <path d="M32 58 L23 41 H41 Z" fill="#facc15"/>
-      <path d="M25 33 L32 22 L39 33 Z" fill="#1f2937"/>
+    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+      <defs>
+        <linearGradient id="defaultPinGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="100%" stop-color="#f1f5f9"/>
+        </linearGradient>
+        <filter id="defaultDropShadow" x="-80%" y="-80%" width="260%" height="260%">
+          <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+        </filter>
+      </defs>
+      <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
+      <circle cx="40" cy="38" r="22" fill="url(#defaultPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#defaultDropShadow)"/>
+      <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
+      <path d="M31 44 L40 28 L49 44 Z" fill="#111827" stroke-linejoin="round"/>
     </svg>
   `;
 }
@@ -524,6 +725,9 @@ async function ensureMarkerImages() {
     ["photo-spot", makeMarkerSvg("photo")],
     ["marker-start", makeMarkerSvg("start")],
     ["marker-target", makeMarkerSvg("target")],
+    ["route-head-glow", makeMarkerSvg("head-glow")],
+    ["route-head-core", makeMarkerSvg("head-core")],
+    ["route-head-spark", makeMarkerSvg("head-spark")],
   ];
 
   for (const [name, svg] of specs) {
@@ -550,6 +754,50 @@ function ensureMarkerLayers() {
     });
   }
 
+  if (!map.getSource("routeHead")) {
+    map.addSource("routeHead", {
+      type: "geojson",
+      data: createFeatureCollection([]),
+    });
+  }
+
+  if (!map.getLayer("route-line-shadow")) {
+    map.addLayer({
+      id: "route-line-shadow",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#000000",
+        "line-opacity": 0.35,
+        "line-blur": 12,
+        "line-translate": [0, 8],
+        "line-width": getRouteLineWidthExpression([12, 10, 14, 16, 16, 24, 18, 32], 1.1),
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-glow-outer")) {
+    map.addLayer({
+      id: "route-line-glow-outer",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FF8F00",
+        "line-opacity": 0.18,
+        "line-blur": 18,
+        "line-width": getRouteLineWidthExpression([12, 9, 14, 14, 16, 22, 18, 30], 1.1),
+      },
+    });
+  }
+
   if (!map.getLayer("route-line-glow")) {
     map.addLayer({
       id: "route-line-glow",
@@ -561,9 +809,27 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#FBC02D",
-        "line-opacity": 0.2,
-        "line-blur": 8,
+        "line-opacity": 0.28,
+        "line-blur": 10,
         "line-width": getRouteLineWidthExpression([12, 6, 14, 10, 16, 16, 18, 22]),
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-glow-inner")) {
+    map.addLayer({
+      id: "route-line-glow-inner",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFEB3B",
+        "line-opacity": 0.42,
+        "line-blur": 5,
+        "line-width": getRouteLineWidthExpression([12, 3.5, 14, 6, 16, 9, 18, 13], 0.95),
       },
     });
   }
@@ -579,8 +845,33 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#FFD600",
-        "line-opacity": 0.95,
-        "line-width": getRouteLineWidthExpression([12, 2.5, 14, 4, 16, 6, 18, 8.5]),
+        "line-opacity": 0.96,
+        "line-width": getRouteLineWidthExpression([12, 2.8, 14, 4.4, 16, 6.6, 18, 9.2]),
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-highlight")) {
+    map.addLayer({
+      id: "route-line-highlight",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#FFFFFF",
+        "line-opacity": [
+          "interpolate",
+          ["linear"],
+          ["line-progress"],
+          0, 0.95,
+          0.6, 0.8,
+          1, 0.35,
+        ],
+        "line-width": getRouteLineWidthExpression([12, 1, 14, 1.5, 16, 2.2, 18, 3], 0.85),
+        "line-translate": [-0.8, -1.2],
       },
     });
   }
@@ -596,8 +887,8 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#FFFFFF",
-        "line-opacity": 0.8,
-        "line-width": getRouteLineWidthExpression([12, 0.8, 14, 1.2, 16, 1.8, 18, 2.5]),
+        "line-opacity": 0.55,
+        "line-width": getRouteLineWidthExpression([12, 1, 14, 1.4, 16, 2, 18, 2.8]),
       },
     });
   }
@@ -616,7 +907,7 @@ function ensureMarkerLayers() {
       source: "highlightPoints",
       layout: {
         "icon-image": ["match", ["get", "kind"], "speed", "highlight-speed", "highlight-elevation"],
-        "icon-size": 0.78,
+        "icon-size": 0.85,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "bottom",
@@ -643,7 +934,7 @@ function ensureMarkerLayers() {
       source: "photoPoints",
       layout: {
         "icon-image": "photo-spot",
-        "icon-size": 0.72,
+        "icon-size": 0.8,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "bottom",
@@ -670,10 +961,64 @@ function ensureMarkerLayers() {
       source: "routeEndpoints",
       layout: {
         "icon-image": ["match", ["get", "kind"], "start", "marker-start", "marker-target"],
-        "icon-size": 0.7,
+        "icon-size": 0.82,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "bottom",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "viewport",
+      },
+    });
+  }
+
+  if (!map.getLayer("route-head-glow")) {
+    map.addLayer({
+      id: "route-head-glow",
+      type: "symbol",
+      source: "routeHead",
+      layout: {
+        "icon-image": "route-head-glow",
+        "icon-size": 0.95,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "center",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "viewport",
+      },
+      paint: {
+        "icon-opacity": 0.92,
+      },
+    });
+  }
+
+  if (!map.getLayer("route-head-core")) {
+    map.addLayer({
+      id: "route-head-core",
+      type: "symbol",
+      source: "routeHead",
+      layout: {
+        "icon-image": "route-head-core",
+        "icon-size": 0.7,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "center",
+        "icon-pitch-alignment": "viewport",
+        "icon-rotation-alignment": "viewport",
+      },
+    });
+  }
+
+  if (!map.getLayer("route-head-spark")) {
+    map.addLayer({
+      id: "route-head-spark",
+      type: "symbol",
+      source: "routeHead",
+      layout: {
+        "icon-image": "route-head-spark",
+        "icon-size": 0.38,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-anchor": "center",
         "icon-pitch-alignment": "viewport",
         "icon-rotation-alignment": "viewport",
       },
@@ -1833,6 +2178,7 @@ function resetAnimatedRouteLine() {
 
   const first = routePoints[0];
   map.getSource("route").setData(createLineFeature([[first.lon, first.lat]]));
+  updateRouteHead(first);
 }
 
 function getStableBearing(points, segmentIndex) {
@@ -1856,26 +2202,54 @@ function getStableBearing(points, segmentIndex) {
   return Number.isFinite(bearing) ? bearing : 0;
 }
 
-function addHelicopterOffset(point, bearingDeg) {
+function addHelicopterOffset(point, bearingDeg, cinematicOffsets = { side: 0, back: 0 }) {
   const cfg = getActiveCameraConfig();
   const latRad = (point.lat * Math.PI) / 180;
   const metersPerDegLat = 111320;
   const metersPerDegLon = 111320 * Math.max(0.2, Math.cos(latRad));
 
+  const totalSide = cfg.sideOffsetM + (cinematicOffsets.side || 0);
+  const totalBack = cfg.backOffsetM + (cinematicOffsets.back || 0);
+
   const backRad = ((bearingDeg + 180) * Math.PI) / 180;
   const sideRad = ((bearingDeg + 90) * Math.PI) / 180;
 
   const offsetNorthM =
-    Math.cos(backRad) * cfg.backOffsetM +
-    Math.cos(sideRad) * cfg.sideOffsetM;
+    Math.cos(backRad) * totalBack +
+    Math.cos(sideRad) * totalSide;
   const offsetEastM =
-    Math.sin(backRad) * cfg.backOffsetM +
-    Math.sin(sideRad) * cfg.sideOffsetM;
+    Math.sin(backRad) * totalBack +
+    Math.sin(sideRad) * totalSide;
 
   return {
     lon: point.lon + offsetEastM / metersPerDegLon,
     lat: point.lat + offsetNorthM / metersPerDegLat,
   };
+}
+
+function computeCinematicOffsets(elapsedMs, progress) {
+  const cfg = getActiveCameraConfig();
+  const cycleMs = cfg.cinematicCycleDuration ?? 18000;
+  const t = (elapsedMs % cycleMs) / cycleMs;
+  const phase = t * Math.PI * 2;
+
+  const introBlend = easeInOutCubic(Math.min(1, progress * 12));
+  const outroBlend = easeInOutCubic(Math.min(1, (1 - progress) * 12));
+  const blend = introBlend * outroBlend;
+
+  const sideAmp = (cfg.cinematicSideAmplitude ?? 24) * blend;
+  const backAmp = (cfg.cinematicBackAmplitude ?? 20) * blend;
+  const zoomAmp = (cfg.cinematicZoomAmplitude ?? 0.2) * blend;
+  const pitchAmp = (cfg.cinematicPitchAmplitude ?? 3.5) * blend;
+  const bobAmp = (cfg.cinematicHeadBobAmountM ?? 2) * blend;
+
+  const side = Math.sin(phase) * sideAmp;
+  const back = Math.cos(phase * 1.3) * backAmp;
+  const zoom = Math.sin(phase * 0.7 + 1.2) * zoomAmp;
+  const pitch = Math.cos(phase * 0.9 + 0.5) * pitchAmp;
+  const bob = Math.sin(phase * 2.1) * bobAmp;
+
+  return { side, back, zoom, pitch, bob };
 }
 
 function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
@@ -1991,27 +2365,31 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 function clearExistingRoute() {
   clearInsightMarkers();
 
-  if (map.getLayer("route-line-floating-glow")) map.removeLayer("route-line-floating-glow");
-  if (map.getLayer("route-line-shadow")) map.removeLayer("route-line-shadow");
-  if (map.getLayer("route-line-bottom")) map.removeLayer("route-line-bottom");
-  if (map.getLayer("route-line-middle")) map.removeLayer("route-line-middle");
-  if (map.getLayer("route-line-top")) map.removeLayer("route-line-top");
-  if (map.getLayer("route-line-top-highlight")) map.removeLayer("route-line-top-highlight");
-  if (map.getLayer("route-line-front-glow")) map.removeLayer("route-line-front-glow");
-  if (map.getLayer("route-line-front")) map.removeLayer("route-line-front");
-  if (map.getLayer("route-line-glow")) map.removeLayer("route-line-glow");
-  if (map.getLayer("route-line-glow-inner")) map.removeLayer("route-line-glow-inner");
-  if (map.getLayer("route-line")) map.removeLayer("route-line");
-  if (map.getLayer("route-line-glow-outer")) map.removeLayer("route-line-glow-outer");
-  if (map.getLayer("route-line-glow-middle")) map.removeLayer("route-line-glow-middle");
-  if (map.getLayer("route-line-base")) map.removeLayer("route-line-base");
-  if (map.getLayer("route-line-main")) map.removeLayer("route-line-main");
+  if (map.getLayer("route-head-spark")) map.removeLayer("route-head-spark");
+  if (map.getLayer("route-head-core")) map.removeLayer("route-head-core");
+  if (map.getLayer("route-head-glow")) map.removeLayer("route-head-glow");
   if (map.getLayer("route-line-highlight")) map.removeLayer("route-line-highlight");
+  if (map.getLayer("route-line-shadow")) map.removeLayer("route-line-shadow");
+  if (map.getLayer("route-line-glow-outer")) map.removeLayer("route-line-glow-outer");
+  if (map.getLayer("route-line-glow-inner")) map.removeLayer("route-line-glow-inner");
   if (map.getLayer("route-line-edge")) map.removeLayer("route-line-edge");
-  
+  if (map.getLayer("route-line")) map.removeLayer("route-line");
+  if (map.getLayer("route-line-glow")) map.removeLayer("route-line-glow");
+
+  if (map.getSource("routeHead")) {
+    map.removeSource("routeHead");
+  }
   if (map.getSource("route")) {
     map.getSource("route").setData(createLineFeature([]));
   }
+}
+
+function updateRouteHead(point) {
+  if (!map.getSource("routeHead") || !point) {
+    return;
+  }
+  const features = [createPointFeature(point.lon, point.lat, {})];
+  map.getSource("routeHead").setData(createFeatureCollection(features));
 }
 
 function drawRouteLine() {
@@ -2023,6 +2401,9 @@ function drawRouteLine() {
   const routeSource = map.getSource("route");
   if (routeSource) {
     routeSource.setData(createLineFeature(initialCoords));
+  }
+  if (routePoints.length > 0) {
+    updateRouteHead(routePoints[0]);
   }
 }
 
@@ -2070,7 +2451,7 @@ async function prewarmRouteTiles() {
 
   const activePoints = cameraPoints.length >= 2 ? cameraPoints : routePoints;
   const cfg = getActiveCameraConfig();
-  const sampleCount = 18;
+  const sampleCount = 22;
   const originalCamera = {
     center: map.getCenter(),
     bearing: map.getBearing(),
@@ -2096,22 +2477,24 @@ async function prewarmRouteTiles() {
     const focusIndex = Math.min(activePoints.length - 1, segmentIndex + cfg.focusAheadPoints);
     const focusPoint = activePoints[focusIndex];
     const routeHead = pointAtProgress(routePoints, progress);
+
+    const cinematic = computeCinematicOffsets(progress * 40000, progress);
     const offsetCenter = keepRouteHeadInViewport(
-      addHelicopterOffset(focusPoint, bearing),
+      addHelicopterOffset(focusPoint, bearing, { side: cinematic.side, back: cinematic.back }),
       routeHead,
       bearing,
-      cfg.pitch,
-      cfg.zoom
+      cfg.pitch + cinematic.pitch,
+      cfg.zoom + cinematic.zoom
     );
 
     map.jumpTo({
       center: [offsetCenter.lon, offsetCenter.lat],
       bearing,
-      pitch: cfg.pitch,
-      zoom: cfg.zoom,
+      pitch: cfg.pitch + cinematic.pitch,
+      zoom: cfg.zoom + cinematic.zoom,
     });
 
-    await waitForMapIdle(220);
+    await waitForMapIdle(200);
   }
 
   map.jumpTo({
@@ -2194,6 +2577,8 @@ function startAnimation() {
     const hardStopTime = startTime + Math.max(durationMs + 3000, durationMs * 1.9);
     let smoothedBearing = null;
     let smoothedCenter = null;
+    let smoothedZoom = null;
+    let smoothedPitch = null;
     let lastFrameAt = startTime;
     let virtualElapsed = 0;
     let lastTrailUpdateAt = 0;
@@ -2228,7 +2613,6 @@ function startAnimation() {
         updateStatsVisibilityByProximity(segmentIndex);
         setSpeedRowByProximity(isNearIndex(segmentIndex, routeInsights?.fastestRouteIndex));
 
-        // 3) Interpolate between route segments with slope-dependent braking
         const currentRouteIdx = segmentIndex;
         const nextRouteIdx = Math.min(segmentIndex + 1, routePoints.length - 1);
         let cameraAlpha = localT;
@@ -2258,7 +2642,6 @@ function startAnimation() {
           routeAlpha
         );
 
-        // Dynamically adjust lookahead based on position in route to prevent off-track issues
         const distanceFromEnd = activePoints.length - 1 - segmentIndex;
         const dynamicLookAhead = Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd));
         const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
@@ -2278,7 +2661,6 @@ function startAnimation() {
           const limitedDelta = Math.max(-maxStep, Math.min(maxStep, smoothedDelta));
           smoothedBearing += limitedDelta;
           
-          // Normalize to 0-360 range
           smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
         }
 
@@ -2291,12 +2673,37 @@ function startAnimation() {
           segmentIndex + dynamicFocusAhead
         );
         const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
+
+        const cinematic = computeCinematicOffsets(virtualElapsed, progress);
+
+        const targetZoom = cfg.zoom + cinematic.zoom;
+        const targetPitch = cfg.pitch + cinematic.pitch;
+
+        if (smoothedZoom === null || !Number.isFinite(smoothedZoom)) smoothedZoom = targetZoom;
+        else smoothedZoom = lerp(smoothedZoom, targetZoom, cfg.centerSmoothing * 1.4);
+
+        if (smoothedPitch === null || !Number.isFinite(smoothedPitch)) smoothedPitch = targetPitch;
+        else smoothedPitch = lerp(smoothedPitch, targetPitch, cfg.centerSmoothing * 1.4);
+
+        const routeHeadWithBob = {
+          lon: smoothRoute.lon,
+          lat: smoothRoute.lat,
+          ele: smoothRoute.ele,
+        };
+        if (cinematic.bob) {
+          const latRad = (routeHeadWithBob.lat * Math.PI) / 180;
+          const metersPerDegLon = 111320 * Math.max(0.2, Math.cos(latRad));
+          const bobRad = ((smoothedBearing + 90) * Math.PI) / 180;
+          routeHeadWithBob.lon += (Math.sin(bobRad) * cinematic.bob) / metersPerDegLon;
+          routeHeadWithBob.lat += (Math.cos(bobRad) * cinematic.bob) / 111320;
+        }
+
         const offsetCenter = keepRouteHeadInViewport(
-          addHelicopterOffset(focusPoint, smoothedBearing),
-          smoothRoute,
+          addHelicopterOffset(focusPoint, smoothedBearing, { side: cinematic.side, back: cinematic.back }),
+          routeHeadWithBob,
           smoothedBearing,
-          cfg.pitch,
-          cfg.zoom
+          smoothedPitch,
+          smoothedZoom
         );
         if (!smoothedCenter) {
           smoothedCenter = offsetCenter;
@@ -2340,21 +2747,21 @@ function startAnimation() {
         const shouldUpdateTrail =
           progress >= 1 || now - lastTrailUpdateAt >= TRAIL_UPDATE_INTERVAL_MS;
         if (shouldUpdateTrail && map.getSource("route")) {
-          // Build trail from scratch to avoid leftover artifacts!
           const animatedCoords = [];
           for (let i = 0; i <= segmentIndex; i += 1) {
             animatedCoords.push([routePoints[i].lon, routePoints[i].lat]);
           }
           animatedCoords.push([smoothRoute.lon, smoothRoute.lat]);
           map.getSource("route").setData(createLineFeature(animatedCoords));
+          updateRouteHead(smoothRoute);
           lastTrailUpdateAt = now;
         }
 
         map.jumpTo({
           center: [smoothedCenter.lon, smoothedCenter.lat],
           bearing: smoothedBearing,
-          pitch: cfg.pitch,
-          zoom: cfg.zoom,
+          pitch: smoothedPitch,
+          zoom: smoothedZoom,
           duration: 0,
         });
 
@@ -2365,6 +2772,10 @@ function startAnimation() {
           if (map.getSource("route")) {
             const finalCoords = routePoints.map((p) => [p.lon, p.lat]);
             map.getSource("route").setData(createLineFeature(finalCoords));
+          }
+          const lastPoint = routePoints[routePoints.length - 1];
+          if (lastPoint) {
+            updateRouteHead(lastPoint);
           }
 
           const outroDuration = Math.min(3200, Math.max(1800, durationMs * 0.18));
@@ -2808,7 +3219,6 @@ function setProgress(progress) {
     routeAlpha
   );
 
-  // Dynamically adjust lookahead based on position in route to prevent off-track issues
   const distanceFromEnd = activePoints.length - 1 - segmentIndex;
   const dynamicLookAhead = Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd));
   const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
@@ -2844,12 +3254,40 @@ function setProgress(progress) {
     segmentIndex + dynamicFocusAhead
   );
   const focusPoint = elevationGain > 0 ? smoothCam : activePoints[focusIndex];
+
+  const virtualElapsed = clampedProgress * durationMs;
+  const cinematic = computeCinematicOffsets(virtualElapsed, clampedProgress);
+
+  const targetZoom = cfg.zoom + cinematic.zoom;
+  const targetPitch = cfg.pitch + cinematic.pitch;
+
+  let smoothedZoom = renderCameraState.smoothedZoom;
+  if (smoothedZoom === null || !Number.isFinite(smoothedZoom)) smoothedZoom = targetZoom;
+  else smoothedZoom = lerp(smoothedZoom, targetZoom, cfg.centerSmoothing * 1.4);
+
+  let smoothedPitch = renderCameraState.smoothedPitch;
+  if (smoothedPitch === null || !Number.isFinite(smoothedPitch)) smoothedPitch = targetPitch;
+  else smoothedPitch = lerp(smoothedPitch, targetPitch, cfg.centerSmoothing * 1.4);
+
+  const routeHeadWithBob = {
+    lon: smoothRoute.lon,
+    lat: smoothRoute.lat,
+    ele: smoothRoute.ele,
+  };
+  if (cinematic.bob) {
+    const latRad = (routeHeadWithBob.lat * Math.PI) / 180;
+    const metersPerDegLon = 111320 * Math.max(0.2, Math.cos(latRad));
+    const bobRad = ((smoothedBearing + 90) * Math.PI) / 180;
+    routeHeadWithBob.lon += (Math.sin(bobRad) * cinematic.bob) / metersPerDegLon;
+    routeHeadWithBob.lat += (Math.cos(bobRad) * cinematic.bob) / 111320;
+  }
+
   const offsetCenter = keepRouteHeadInViewport(
-    addHelicopterOffset(focusPoint, smoothedBearing),
-    smoothRoute,
+    addHelicopterOffset(focusPoint, smoothedBearing, { side: cinematic.side, back: cinematic.back }),
+    routeHeadWithBob,
     smoothedBearing,
-    cfg.pitch,
-    cfg.zoom
+    smoothedPitch,
+    smoothedZoom
   );
 
   let smoothedCenter = renderCameraState.smoothedCenter;
@@ -2862,7 +3300,6 @@ function setProgress(progress) {
     };
   }
 
-  // Update trail
   const trailCoords = [];
   for (let i = 0; i <= segmentIndex; i += 1) {
     trailCoords.push([routePoints[i].lon, routePoints[i].lat]);
@@ -2872,18 +3309,21 @@ function setProgress(progress) {
   if (map.getSource("route")) {
     map.getSource("route").setData(createLineFeature(trailCoords));
   }
+  updateRouteHead(smoothRoute);
 
   map.jumpTo({
     center: [smoothedCenter.lon, smoothedCenter.lat],
     bearing: smoothedBearing,
-    pitch: cfg.pitch,
-    zoom: cfg.zoom,
+    pitch: smoothedPitch,
+    zoom: smoothedZoom,
     duration: 0,
   });
 
   renderCameraState.lastProgress = clampedProgress;
   renderCameraState.smoothedBearing = smoothedBearing;
   renderCameraState.smoothedCenter = smoothedCenter;
+  renderCameraState.smoothedZoom = smoothedZoom;
+  renderCameraState.smoothedPitch = smoothedPitch;
 
   return true;
 }
