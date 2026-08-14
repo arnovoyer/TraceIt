@@ -252,6 +252,12 @@ function getActiveCameraConfig() {
     const extraPortraitBoost = formatKey === "portrait" ? 0.42 : 0;
     config.zoom += renderZoomOffset + extraPortraitBoost;
 
+    config.cinematicSideAmplitude = (config.cinematicSideAmplitude ?? 24) * 1.28;
+    config.cinematicBackAmplitude = (config.cinematicBackAmplitude ?? 20) * 1.22;
+    config.cinematicZoomAmplitude = (config.cinematicZoomAmplitude ?? 0.2) * 1.25;
+    config.cinematicPitchAmplitude = (config.cinematicPitchAmplitude ?? 3.5) * 1.2;
+    config.cinematicHeadBobAmountM = (config.cinematicHeadBobAmountM ?? 2) * 1.15;
+
     if (formatKey === "portrait" && isAltitudeOverlayVisible) {
       config.viewportMarginTop = Math.max(config.viewportMarginTop ?? 0, 0.36);
       config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.11);
@@ -280,6 +286,9 @@ function syncRouteLineAppearance() {
   const edgeScale = isRenderMode ? 1.22 : 1;
   const shadowScale = isRenderMode ? 1.35 : 1.1;
   const headGlowScale = isRenderMode ? 1.45 : 1.2;
+  const endpointIconScale = isRenderMode ? 0.95 : 0.82;
+  const highlightIconScale = isRenderMode ? 0.98 : 0.85;
+  const photoIconScale = isRenderMode ? 0.92 : 0.8;
 
   if (map.getLayer("route-line-shadow")) {
     map.setPaintProperty(
@@ -359,6 +368,18 @@ function syncRouteLineAppearance() {
       "icon-size",
       (isRenderMode ? 0.45 : 0.38) * headGlowScale
     );
+  }
+
+  if (map.getLayer("routeEndpointsLayer")) {
+    map.setLayoutProperty("routeEndpointsLayer", "icon-size", endpointIconScale);
+  }
+
+  if (map.getLayer("highlightPointsLayer")) {
+    map.setLayoutProperty("highlightPointsLayer", "icon-size", highlightIconScale);
+  }
+
+  if (map.getLayer("photoPointsLayer")) {
+    map.setLayoutProperty("photoPointsLayer", "icon-size", photoIconScale);
   }
 }
 
