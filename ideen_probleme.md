@@ -6,3 +6,4 @@
 - start/ziel punkte location überarbeiten
 - linie geht in höhendiagramm
 - höhendiagramm startet erst bei ung 2 sekunden
+- zieht immer die linie viel weiter weg

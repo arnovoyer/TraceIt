@@ -1974,10 +1974,10 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
         duration: 0,
       });
       const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY + 4) {
+      if (verifyHeadPx.y >= minY + 10) {
         break;
       }
-      const stepBoost = guard >= 2 ? 60 : 36;
+      const stepBoost = guard >= 2 ? 60 : 42;
       const safetyDeltaPx = minY - verifyHeadPx.y + stepBoost;
       const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
       adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
