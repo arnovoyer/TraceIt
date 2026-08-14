@@ -281,44 +281,26 @@ function getRouteLineWidthExpression(stops, scale = 1) {
 }
 
 function syncRouteLineAppearance() {
-  const mainScale = isRenderMode ? 1.28 : 1;
-  const glowScale = isRenderMode ? 1.24 : 1;
-  const edgeScale = isRenderMode ? 1.22 : 1;
-  const shadowScale = isRenderMode ? 1.35 : 1.1;
-  const headGlowScale = isRenderMode ? 1.45 : 1.2;
-  const endpointIconScale = isRenderMode ? 0.95 : 0.82;
-  const highlightIconScale = isRenderMode ? 0.98 : 0.85;
-  const photoIconScale = isRenderMode ? 0.92 : 0.8;
+  const mainScale = isRenderMode ? 1.15 : 1;
+  const shadowScale = isRenderMode ? 1.18 : 1;
+  const headScale = isRenderMode ? 1.15 : 1;
+  const endpointIconScale = isRenderMode ? 0.88 : 0.76;
+  const highlightIconScale = isRenderMode ? 0.92 : 0.8;
+  const photoIconScale = isRenderMode ? 0.86 : 0.74;
 
   if (map.getLayer("route-line-shadow")) {
     map.setPaintProperty(
       "route-line-shadow",
       "line-width",
-      getRouteLineWidthExpression([12, 10, 14, 16, 16, 24, 18, 32], shadowScale)
+      getRouteLineWidthExpression([12, 8, 14, 12, 16, 18, 18, 24], shadowScale)
     );
   }
 
-  if (map.getLayer("route-line-glow-outer")) {
+  if (map.getLayer("route-line-outline")) {
     map.setPaintProperty(
-      "route-line-glow-outer",
+      "route-line-outline",
       "line-width",
-      getRouteLineWidthExpression([12, 9, 14, 14, 16, 22, 18, 30], glowScale * 1.1)
-    );
-  }
-
-  if (map.getLayer("route-line-glow")) {
-    map.setPaintProperty(
-      "route-line-glow",
-      "line-width",
-      getRouteLineWidthExpression([12, 6, 14, 10, 16, 16, 18, 22], glowScale)
-    );
-  }
-
-  if (map.getLayer("route-line-glow-inner")) {
-    map.setPaintProperty(
-      "route-line-glow-inner",
-      "line-width",
-      getRouteLineWidthExpression([12, 3.5, 14, 6, 16, 9, 18, 13], glowScale * 0.95)
+      getRouteLineWidthExpression([12, 4, 14, 6.5, 16, 9, 18, 12.5], mainScale)
     );
   }
 
@@ -326,7 +308,7 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line",
       "line-width",
-      getRouteLineWidthExpression([12, 2.8, 14, 4.4, 16, 6.6, 18, 9.2], mainScale)
+      getRouteLineWidthExpression([12, 2, 14, 3.5, 16, 5.5, 18, 8], mainScale)
     );
   }
 
@@ -334,39 +316,23 @@ function syncRouteLineAppearance() {
     map.setPaintProperty(
       "route-line-highlight",
       "line-width",
-      getRouteLineWidthExpression([12, 1, 14, 1.5, 16, 2.2, 18, 3], mainScale * 0.85)
+      getRouteLineWidthExpression([12, 0.6, 14, 1, 16, 1.5, 18, 2.2], mainScale)
     );
   }
 
-  if (map.getLayer("route-line-edge")) {
-    map.setPaintProperty(
-      "route-line-edge",
-      "line-width",
-      getRouteLineWidthExpression([12, 1, 14, 1.4, 16, 2, 18, 2.8], edgeScale)
-    );
-  }
-
-  if (map.getLayer("route-head-glow")) {
+  if (map.getLayer("route-head-main")) {
     map.setLayoutProperty(
-      "route-head-glow",
+      "route-head-main",
       "icon-size",
-      (isRenderMode ? 1.15 : 0.95) * headGlowScale
+      (isRenderMode ? 0.68 : 0.6) * headScale
     );
   }
 
-  if (map.getLayer("route-head-core")) {
+  if (map.getLayer("route-head-dot")) {
     map.setLayoutProperty(
-      "route-head-core",
+      "route-head-dot",
       "icon-size",
-      (isRenderMode ? 0.85 : 0.7) * headGlowScale
-    );
-  }
-
-  if (map.getLayer("route-head-spark")) {
-    map.setLayoutProperty(
-      "route-head-spark",
-      "icon-size",
-      (isRenderMode ? 0.45 : 0.38) * headGlowScale
+      (isRenderMode ? 0.4 : 0.35) * headScale
     );
   }
 
@@ -529,212 +495,122 @@ function createSvgDataUrl(svg) {
 function makeMarkerSvg(kind) {
   if (kind === "photo") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+      <svg xmlns="http://www.w3.org/2000/svg" width="72" height="96" viewBox="0 0 72 96">
         <defs>
-          <linearGradient id="photoPinGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#ffffff"/>
-            <stop offset="100%" stop-color="#e5e7eb"/>
-          </linearGradient>
-          <filter id="photoDropShadow" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
-          </filter>
-          <filter id="photoSoftGlow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.2" result="blur"/>
-            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          <filter id="photoShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
           </filter>
         </defs>
-        <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
-        <circle cx="40" cy="38" r="22" fill="url(#photoPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#photoDropShadow)"/>
-        <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
-        <rect x="26" y="26" width="28" height="20" rx="3.5" fill="#374151"/>
-        <rect x="28" y="28" width="24" height="16" rx="2.5" fill="#6b7280"/>
-        <circle cx="40" cy="36" r="6.5" fill="#1f2937" stroke="#9ca3af" stroke-width="1.2"/>
-        <circle cx="40" cy="36" r="3.2" fill="#e5e7eb" filter="url(#photoSoftGlow)"/>
+        <path d="M36 86 L18 52 C12 42 18 32 28 28 L44 28 C54 32 60 42 54 52 Z" fill="#111827" filter="url(#photoShadow)"/>
+        <path d="M36 84 L20 52 C15 44 20 35 29 32 L43 32 C52 35 57 44 52 52 Z" fill="#FBBF24"/>
+        <rect x="24" y="36" width="24" height="18" rx="3" fill="#111827"/>
+        <rect x="26" y="38" width="20" height="14" rx="2" fill="#374151"/>
+        <circle cx="36" cy="45" r="4.5" fill="#111827"/>
+        <circle cx="36" cy="45" r="2.2" fill="#E5E7EB"/>
       </svg>
     `;
   }
 
   if (kind === "speed") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+      <svg xmlns="http://www.w3.org/2000/svg" width="72" height="96" viewBox="0 0 72 96">
         <defs>
-          <linearGradient id="speedPinGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#ffffff"/>
-            <stop offset="100%" stop-color="#f1f5f9"/>
-          </linearGradient>
-          <filter id="speedDropShadow" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+          <filter id="speedShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
           </filter>
         </defs>
-        <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
-        <circle cx="40" cy="38" r="22" fill="url(#speedPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#speedDropShadow)"/>
-        <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
-        <path d="M33 44 L39 30 L35 30 L41 18 L39 30 L44 30 Z" fill="#111827" stroke="#f97316" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M36 86 L18 52 C12 42 18 32 28 28 L44 28 C54 32 60 42 54 52 Z" fill="#111827" filter="url(#speedShadow)"/>
+        <path d="M36 84 L20 52 C15 44 20 35 29 32 L43 32 C52 35 57 44 52 52 Z" fill="#FBBF24"/>
+        <path d="M29 48 L35 36 L31 36 L37 24 L35 36 L40 36 Z" fill="#111827" stroke-linejoin="round"/>
       </svg>
     `;
   }
 
   if (kind === "elevation") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+      <svg xmlns="http://www.w3.org/2000/svg" width="72" height="96" viewBox="0 0 72 96">
         <defs>
-          <linearGradient id="elevPinGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#ffffff"/>
-            <stop offset="100%" stop-color="#f1f5f9"/>
-          </linearGradient>
-          <filter id="elevDropShadow" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+          <filter id="elevShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
           </filter>
         </defs>
-        <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
-        <circle cx="40" cy="38" r="22" fill="url(#elevPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#elevDropShadow)"/>
-        <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
-        <path d="M29 44 L36 30 L41 37 L47 24 L51 44 Z" fill="#111827" stroke="#059669" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M36 86 L18 52 C12 42 18 32 28 28 L44 28 C54 32 60 42 54 52 Z" fill="#111827" filter="url(#elevShadow)"/>
+        <path d="M36 84 L20 52 C15 44 20 35 29 32 L43 32 C52 35 57 44 52 52 Z" fill="#FBBF24"/>
+        <path d="M26 48 L33 34 L37 41 L43 28 L47 48 Z" fill="#111827" stroke-linejoin="round"/>
       </svg>
     `;
   }
 
   if (kind === "start") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="100" height="128" viewBox="0 0 100 128">
+      <svg xmlns="http://www.w3.org/2000/svg" width="88" height="112" viewBox="0 0 88 112">
         <defs>
-          <linearGradient id="startMainGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#FFE066"/>
-            <stop offset="45%" stop-color="#FFC400"/>
-            <stop offset="100%" stop-color="#FF9800"/>
-          </linearGradient>
-          <radialGradient id="startOuterGlow" cx="50%" cy="38%" r="55%">
-            <stop offset="0%" stop-color="#FFEB3B" stop-opacity="0.7"/>
-            <stop offset="55%" stop-color="#FFC107" stop-opacity="0.25"/>
-            <stop offset="100%" stop-color="#FFC107" stop-opacity="0"/>
-          </radialGradient>
-          <radialGradient id="startInnerHalo" cx="50%" cy="40%" r="45%">
-            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
-            <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0"/>
-          </radialGradient>
-          <filter id="startStrongShadow" x="-100%" y="-100%" width="300%" height="300%">
-            <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#E65100" flood-opacity="0.55"/>
-          </filter>
-          <filter id="startPinBlur" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="1.2"/>
+          <filter id="startShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.38"/>
           </filter>
         </defs>
-        <circle cx="50" cy="48" r="40" fill="url(#startOuterGlow)"/>
-        <circle cx="50" cy="48" r="30" fill="url(#startInnerHalo)"/>
-        <circle cx="50" cy="48" r="24" fill="url(#startMainGrad)" stroke="#FFFFFF" stroke-width="4" filter="url(#startStrongShadow)"/>
-        <circle cx="50" cy="42" r="9" fill="#FFFFFF" opacity="0.55" filter="url(#startPinBlur)"/>
-        <circle cx="50" cy="48" r="14" fill="#FFFFFF"/>
-        <text x="50" y="54" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="900" fill="#EF6C00">S</text>
-        <path d="M50 90 L32 58 H68 Z" fill="url(#startMainGrad)" stroke="#FFFFFF" stroke-width="3.5" stroke-linejoin="round"/>
-        <path d="M50 82 L39 62 H61 Z" fill="#FFE082" opacity="0.35"/>
+        <path d="M44 100 L22 58 C14 44 22 28 38 24 L50 24 C66 28 74 44 66 58 Z" fill="#111827" filter="url(#startShadow)"/>
+        <path d="M44 98 L24 58 C17 46 24 31 38 28 L50 28 C64 31 71 46 64 58 Z" fill="#22C55E"/>
+        <circle cx="44" cy="47" r="15" fill="#FFFFFF"/>
+        <circle cx="44" cy="47" r="15" fill="none" stroke="#16A34A" stroke-width="2.5"/>
+        <circle cx="44" cy="47" r="6" fill="#22C55E"/>
       </svg>
     `;
   }
 
   if (kind === "target") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="100" height="128" viewBox="0 0 100 128">
+      <svg xmlns="http://www.w3.org/2000/svg" width="88" height="112" viewBox="0 0 88 112">
         <defs>
-          <linearGradient id="targetMainGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stop-color="#FF6E6E"/>
-            <stop offset="45%" stop-color="#FF3030"/>
-            <stop offset="100%" stop-color="#C62828"/>
-          </linearGradient>
-          <radialGradient id="targetOuterGlow" cx="50%" cy="38%" r="55%">
-            <stop offset="0%" stop-color="#FF5252" stop-opacity="0.65"/>
-            <stop offset="55%" stop-color="#F44336" stop-opacity="0.22"/>
-            <stop offset="100%" stop-color="#F44336" stop-opacity="0"/>
-          </radialGradient>
-          <radialGradient id="targetInnerHalo" cx="50%" cy="40%" r="45%">
-            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
-            <stop offset="70%" stop-color="#FFFFFF" stop-opacity="0"/>
-          </radialGradient>
-          <filter id="targetStrongShadow" x="-100%" y="-100%" width="300%" height="300%">
-            <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#B71C1C" flood-opacity="0.55"/>
-          </filter>
-          <filter id="targetPinBlur" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="1.2"/>
+          <filter id="targetShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.38"/>
           </filter>
         </defs>
-        <circle cx="50" cy="48" r="40" fill="url(#targetOuterGlow)"/>
-        <circle cx="50" cy="48" r="30" fill="url(#targetInnerHalo)"/>
-        <circle cx="50" cy="48" r="24" fill="url(#targetMainGrad)" stroke="#FFFFFF" stroke-width="4" filter="url(#targetStrongShadow)"/>
-        <circle cx="50" cy="42" r="9" fill="#FFFFFF" opacity="0.55" filter="url(#targetPinBlur)"/>
-        <circle cx="50" cy="48" r="14" fill="#FFFFFF"/>
-        <text x="50" y="54" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="900" fill="#B71C1C">Z</text>
-        <path d="M50 90 L32 58 H68 Z" fill="url(#targetMainGrad)" stroke="#FFFFFF" stroke-width="3.5" stroke-linejoin="round"/>
-        <path d="M50 82 L39 62 H61 Z" fill="#FFCDD2" opacity="0.35"/>
+        <path d="M44 100 L22 58 C14 44 22 28 38 24 L50 24 C66 28 74 44 66 58 Z" fill="#111827" filter="url(#targetShadow)"/>
+        <path d="M44 98 L24 58 C17 46 24 31 38 28 L50 28 C64 31 71 46 64 58 Z" fill="#EF4444"/>
+        <circle cx="44" cy="47" r="15" fill="#FFFFFF"/>
+        <circle cx="44" cy="47" r="15" fill="none" stroke="#DC2626" stroke-width="2.5"/>
+        <circle cx="44" cy="47" r="6" fill="#EF4444"/>
       </svg>
     `;
   }
 
-  if (kind === "head-glow") {
+  if (kind === "head-main") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+      <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
         <defs>
-          <radialGradient id="headGlowGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#FFEB3B" stop-opacity="0.85"/>
-            <stop offset="25%" stop-color="#FFC400" stop-opacity="0.55"/>
-            <stop offset="55%" stop-color="#FF9800" stop-opacity="0.22"/>
-            <stop offset="100%" stop-color="#FF6F00" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <circle cx="80" cy="80" r="78" fill="url(#headGlowGrad)"/>
-      </svg>
-    `;
-  }
-
-  if (kind === "head-core") {
-    return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">
-        <defs>
-          <linearGradient id="headCoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#FFFFFF"/>
-            <stop offset="35%" stop-color="#FFE082"/>
-            <stop offset="75%" stop-color="#FFC400"/>
-            <stop offset="100%" stop-color="#FF8F00"/>
-          </linearGradient>
-          <filter id="headCoreShadow" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3.5" flood-color="#E65100" flood-opacity="0.55"/>
+          <filter id="headShadow" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.45"/>
           </filter>
         </defs>
-        <circle cx="40" cy="40" r="26" fill="#FFFFFF" opacity="0.22"/>
-        <circle cx="40" cy="40" r="20" fill="url(#headCoreGrad)" stroke="#FFFFFF" stroke-width="3.2" filter="url(#headCoreShadow)"/>
-        <circle cx="34" cy="33" r="6" fill="#FFFFFF" opacity="0.75"/>
+        <circle cx="28" cy="28" r="22" fill="#111827" filter="url(#headShadow)"/>
+        <circle cx="28" cy="28" r="18" fill="#FFFFFF"/>
+        <circle cx="28" cy="28" r="18" fill="none" stroke="#F59E0B" stroke-width="3"/>
+        <circle cx="28" cy="28" r="8" fill="#F59E0B"/>
       </svg>
     `;
   }
 
-  if (kind === "head-spark") {
+  if (kind === "head-dot") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-        <defs>
-          <radialGradient id="sparkGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
-            <stop offset="60%" stop-color="#FFF9C4" stop-opacity="0.85"/>
-            <stop offset="100%" stop-color="#FFE082" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <circle cx="20" cy="20" r="19" fill="url(#sparkGrad)"/>
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="9" fill="#FFFFFF"/>
+        <circle cx="10" cy="10" r="9" fill="none" stroke="#F59E0B" stroke-width="1.5"/>
+        <circle cx="10" cy="10" r="3.5" fill="#F59E0B"/>
       </svg>
     `;
   }
 
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="104" viewBox="0 0 80 104">
+    <svg xmlns="http://www.w3.org/2000/svg" width="72" height="96" viewBox="0 0 72 96">
       <defs>
-        <linearGradient id="defaultPinGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ffffff"/>
-          <stop offset="100%" stop-color="#f1f5f9"/>
-        </linearGradient>
-        <filter id="defaultDropShadow" x="-80%" y="-80%" width="260%" height="260%">
-          <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.45"/>
+        <filter id="defaultShadow" x="-60%" y="-60%" width="220%" height="220%">
+          <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.35"/>
         </filter>
       </defs>
-      <circle cx="40" cy="38" r="26" fill="#facc15" opacity="0.35"/>
-      <circle cx="40" cy="38" r="22" fill="url(#defaultPinGrad)" stroke="#facc15" stroke-width="3" filter="url(#defaultDropShadow)"/>
-      <path d="M40 78 L26 50 H54 Z" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
-      <path d="M31 44 L40 28 L49 44 Z" fill="#111827" stroke-linejoin="round"/>
+      <path d="M36 86 L18 52 C12 42 18 32 28 28 L44 28 C54 32 60 42 54 52 Z" fill="#111827" filter="url(#defaultShadow)"/>
+      <path d="M36 84 L20 52 C15 44 20 35 29 32 L43 32 C52 35 57 44 52 52 Z" fill="#FBBF24"/>
+      <path d="M28 48 L36 34 L44 48 Z" fill="#111827" stroke-linejoin="round"/>
     </svg>
   `;
 }
@@ -746,9 +622,8 @@ async function ensureMarkerImages() {
     ["photo-spot", makeMarkerSvg("photo")],
     ["marker-start", makeMarkerSvg("start")],
     ["marker-target", makeMarkerSvg("target")],
-    ["route-head-glow", makeMarkerSvg("head-glow")],
-    ["route-head-core", makeMarkerSvg("head-core")],
-    ["route-head-spark", makeMarkerSvg("head-spark")],
+    ["route-head-main", makeMarkerSvg("head-main")],
+    ["route-head-dot", makeMarkerSvg("head-dot")],
   ];
 
   for (const [name, svg] of specs) {
@@ -793,64 +668,27 @@ function ensureMarkerLayers() {
       },
       paint: {
         "line-color": "#000000",
-        "line-opacity": 0.35,
-        "line-blur": 12,
-        "line-translate": [0, 8],
-        "line-width": getRouteLineWidthExpression([12, 10, 14, 16, 16, 24, 18, 32], 1.1),
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-glow-outer")) {
-    map.addLayer({
-      id: "route-line-glow-outer",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FF8F00",
-        "line-opacity": 0.18,
-        "line-blur": 18,
-        "line-width": getRouteLineWidthExpression([12, 9, 14, 14, 16, 22, 18, 30], 1.1),
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-glow")) {
-    map.addLayer({
-      id: "route-line-glow",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FBC02D",
-        "line-opacity": 0.28,
-        "line-blur": 10,
-        "line-width": getRouteLineWidthExpression([12, 6, 14, 10, 16, 16, 18, 22]),
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-glow-inner")) {
-    map.addLayer({
-      id: "route-line-glow-inner",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FFEB3B",
-        "line-opacity": 0.42,
+        "line-opacity": 0.25,
         "line-blur": 5,
-        "line-width": getRouteLineWidthExpression([12, 3.5, 14, 6, 16, 9, 18, 13], 0.95),
+        "line-translate": [0, 5],
+        "line-width": getRouteLineWidthExpression([12, 8, 14, 12, 16, 18, 18, 24], 1),
+      },
+    });
+  }
+
+  if (!map.getLayer("route-line-outline")) {
+    map.addLayer({
+      id: "route-line-outline",
+      type: "line",
+      source: "route",
+      layout: {
+        "line-join": "round",
+        "line-cap": "round",
+      },
+      paint: {
+        "line-color": "#111827",
+        "line-opacity": 0.9,
+        "line-width": getRouteLineWidthExpression([12, 4, 14, 6.5, 16, 9, 18, 12.5], 1),
       },
     });
   }
@@ -865,9 +703,9 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FFD600",
-        "line-opacity": 0.96,
-        "line-width": getRouteLineWidthExpression([12, 2.8, 14, 4.4, 16, 6.6, 18, 9.2]),
+        "line-color": "#F59E0B",
+        "line-opacity": 1,
+        "line-width": getRouteLineWidthExpression([12, 2, 14, 3.5, 16, 5.5, 18, 8], 1),
       },
     });
   }
@@ -882,34 +720,17 @@ function ensureMarkerLayers() {
         "line-cap": "round",
       },
       paint: {
-        "line-color": "#FFFFFF",
+        "line-color": "#FDE68A",
         "line-opacity": [
           "interpolate",
           ["linear"],
           ["line-progress"],
-          0, 0.95,
-          0.6, 0.8,
+          0, 0.9,
+          0.7, 0.7,
           1, 0.35,
         ],
-        "line-width": getRouteLineWidthExpression([12, 1, 14, 1.5, 16, 2.2, 18, 3], 0.85),
-        "line-translate": [-0.8, -1.2],
-      },
-    });
-  }
-
-  if (!map.getLayer("route-line-edge")) {
-    map.addLayer({
-      id: "route-line-edge",
-      type: "line",
-      source: "route",
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
-      },
-      paint: {
-        "line-color": "#FFFFFF",
-        "line-opacity": 0.55,
-        "line-width": getRouteLineWidthExpression([12, 1, 14, 1.4, 16, 2, 18, 2.8]),
+        "line-width": getRouteLineWidthExpression([12, 0.6, 14, 1, 16, 1.5, 18, 2.2], 1),
+        "line-translate": [-0.5, -0.8],
       },
     });
   }
@@ -992,34 +813,14 @@ function ensureMarkerLayers() {
     });
   }
 
-  if (!map.getLayer("route-head-glow")) {
+  if (!map.getLayer("route-head-main")) {
     map.addLayer({
-      id: "route-head-glow",
+      id: "route-head-main",
       type: "symbol",
       source: "routeHead",
       layout: {
-        "icon-image": "route-head-glow",
-        "icon-size": 0.95,
-        "icon-allow-overlap": true,
-        "icon-ignore-placement": true,
-        "icon-anchor": "center",
-        "icon-pitch-alignment": "viewport",
-        "icon-rotation-alignment": "viewport",
-      },
-      paint: {
-        "icon-opacity": 0.92,
-      },
-    });
-  }
-
-  if (!map.getLayer("route-head-core")) {
-    map.addLayer({
-      id: "route-head-core",
-      type: "symbol",
-      source: "routeHead",
-      layout: {
-        "icon-image": "route-head-core",
-        "icon-size": 0.7,
+        "icon-image": "route-head-main",
+        "icon-size": 0.6,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "center",
@@ -1029,14 +830,14 @@ function ensureMarkerLayers() {
     });
   }
 
-  if (!map.getLayer("route-head-spark")) {
+  if (!map.getLayer("route-head-dot")) {
     map.addLayer({
-      id: "route-head-spark",
+      id: "route-head-dot",
       type: "symbol",
       source: "routeHead",
       layout: {
-        "icon-image": "route-head-spark",
-        "icon-size": 0.38,
+        "icon-image": "route-head-dot",
+        "icon-size": 0.35,
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-anchor": "center",
@@ -2386,16 +2187,12 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 function clearExistingRoute() {
   clearInsightMarkers();
 
-  if (map.getLayer("route-head-spark")) map.removeLayer("route-head-spark");
-  if (map.getLayer("route-head-core")) map.removeLayer("route-head-core");
-  if (map.getLayer("route-head-glow")) map.removeLayer("route-head-glow");
+  if (map.getLayer("route-head-dot")) map.removeLayer("route-head-dot");
+  if (map.getLayer("route-head-main")) map.removeLayer("route-head-main");
   if (map.getLayer("route-line-highlight")) map.removeLayer("route-line-highlight");
-  if (map.getLayer("route-line-shadow")) map.removeLayer("route-line-shadow");
-  if (map.getLayer("route-line-glow-outer")) map.removeLayer("route-line-glow-outer");
-  if (map.getLayer("route-line-glow-inner")) map.removeLayer("route-line-glow-inner");
-  if (map.getLayer("route-line-edge")) map.removeLayer("route-line-edge");
   if (map.getLayer("route-line")) map.removeLayer("route-line");
-  if (map.getLayer("route-line-glow")) map.removeLayer("route-line-glow");
+  if (map.getLayer("route-line-outline")) map.removeLayer("route-line-outline");
+  if (map.getLayer("route-line-shadow")) map.removeLayer("route-line-shadow");
 
   if (map.getSource("routeHead")) {
     map.removeSource("routeHead");
