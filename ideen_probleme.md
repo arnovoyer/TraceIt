@@ -7,3 +7,4 @@
 - linie geht in höhendiagramm
 - höhendiagramm startet erst bei ung 2 sekunden
 - zieht immer die linie viel weiter weg
+- kamera zieht teilweise außerhalb der kamera
