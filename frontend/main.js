@@ -2394,6 +2394,12 @@ function startAnimation() {
 
     const animate = (now) => {
       try {
+        const canvas = map.getCanvas?.();
+        if (!canvas) {
+          animationFrameId = null;
+          resolve(false);
+          return;
+        }
         const dtMs = Math.max(1, now - lastFrameAt);
         lastFrameAt = now;
         const timedOut = now >= hardStopTime;
@@ -2543,17 +2549,17 @@ function startAnimation() {
           duration: 0,
         });
         const postHeadPx = map.project([routeHeadWithBob.lon, routeHeadWithBob.lat]);
-        const w = canvas ? canvas.width : map.getCanvas().width;
-        const h = canvas ? canvas.height : map.getCanvas().height;
+        const w = canvas.width;
+        const h = canvas.height;
         const minXHard = w * 0.04;
         const maxXHard = w * 0.96;
         const hardMarginTop = (getSelectedFormatKey() === "portrait" && isAltitudeOverlayVisible)
-          ? (getAltitudeOverlaySafeBottomPx(map.getCanvas()) + 28)
+          ? (getAltitudeOverlaySafeBottomPx(canvas) + 28)
           : h * 0.1;
         const minYHard = hardMarginTop;
         const maxYHard = h * 0.92;
-        const headOffScreenX = postHeadPx.x < minXHard || postHeadPx.x > maxXHard;
-        const headOffScreenY = postHeadPx.y < minYHard || postHeadPx.y > maxYHard;
+        const headOffScreenX = w > 0 && (postHeadPx.x < minXHard || postHeadPx.x > maxXHard);
+        const headOffScreenY = h > 0 && (postHeadPx.y < minYHard || postHeadPx.y > maxYHard);
         const emergency = headOffScreenX || headOffScreenY;
 
         if (!smoothedCenter || emergency) {
