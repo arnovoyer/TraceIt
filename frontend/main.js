@@ -1998,22 +1998,23 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const cfg = getActiveCameraConfig();
   const isPortrait = formatKey === "portrait";
 
-  let marginX = cfg.viewportMarginX ?? (isPortrait ? 0.1 : 0.08);
-  let marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.1 : 0.08);
-  let marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.08 : 0.06);
+  let marginX = cfg.viewportMarginX ?? (isPortrait ? 0.12 : 0.1);
+  let marginTop = cfg.viewportMarginTop ?? (isPortrait ? 0.12 : 0.1);
+  let marginBottom = cfg.viewportMarginBottom ?? (isPortrait ? 0.12 : 0.08);
   let anchorX = cfg.headAnchorX ?? 0.5;
-  let anchorY = cfg.headAnchorY ?? (isPortrait ? 0.75 : 0.65);
+  let anchorY = cfg.headAnchorY ?? (isPortrait ? 0.72 : 0.62);
 
   const needsHardAltitudeSafeY = isPortrait && isAltitudeOverlayVisible;
   if (needsHardAltitudeSafeY) {
     marginTop = Math.max(marginTop, 0.36);
     anchorY = 0.56;
-    marginX = Math.max(marginX, 0.12);
+    marginX = Math.max(marginX, 0.14);
+    marginBottom = Math.max(marginBottom, 0.14);
   }
 
-  let pullStrength = isPortrait ? 0.26 : 0.1;
+  let pullStrength = isPortrait ? 0.34 : 0.16;
   if (needsHardAltitudeSafeY) {
-    pullStrength = 0.52;
+    pullStrength = 0.62;
   }
 
   map.jumpTo({
@@ -2030,7 +2031,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
   let minY = h * marginTop;
   if (needsHardAltitudeSafeY) {
-    minY = getAltitudeOverlaySafeBottomPx(canvas) + 28;
+    minY = getAltitudeOverlaySafeBottomPx(canvas) + 36;
   }
 
   const minX = w * marginX;
@@ -2038,61 +2039,95 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const maxY = h * (1 - marginBottom);
   const targetX = w * anchorX;
   const targetY = h * anchorY;
+  const BUFFER_PX = 10;
 
   let dx = 0;
   let dy = 0;
 
   if (headPx.x < minX) {
-    dx = headPx.x - minX;
+    dx = headPx.x - minX - BUFFER_PX;
   } else if (headPx.x > maxX) {
-    dx = headPx.x - maxX;
+    dx = headPx.x - maxX + BUFFER_PX;
   } else {
     dx = (headPx.x - targetX) * pullStrength;
   }
 
   if (headPx.y < minY) {
-    dy = headPx.y - minY;
+    dy = headPx.y - minY - BUFFER_PX;
     if (needsHardAltitudeSafeY) {
-      dy -= 32;
+      dy -= 44;
     }
   } else if (headPx.y > maxY) {
-    dy = headPx.y - maxY;
+    dy = headPx.y - maxY + BUFFER_PX;
   } else {
-    if (needsHardAltitudeSafeY && headPx.y < minY + 90) {
-      const t = 1 - Math.max(0, (headPx.y - minY) / 90);
-      dy = (headPx.y - targetY) * pullStrength - t * 48;
+    if (needsHardAltitudeSafeY && headPx.y < minY + 110) {
+      const t = 1 - Math.max(0, (headPx.y - minY) / 110);
+      dy = (headPx.y - targetY) * pullStrength - t * 62;
     } else {
       dy = (headPx.y - targetY) * pullStrength;
     }
-  }
-
-  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
-    return rawCenter;
   }
 
   const centerPx = map.project([rawCenter.lon, rawCenter.lat]);
   let adjusted = map.unproject([centerPx.x + dx, centerPx.y + dy]);
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
 
-  if (needsHardAltitudeSafeY) {
-    for (let guard = 0; guard < 7; guard += 1) {
-      map.jumpTo({
-        center: [resultCenter.lon, resultCenter.lat],
-        bearing,
-        pitch,
-        zoom,
-        duration: 0,
-      });
-      const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
-      if (verifyHeadPx.y >= minY + 14) {
-        break;
-      }
-      const stepBoost = guard >= 3 ? 80 : 52;
-      const safetyDeltaPx = minY - verifyHeadPx.y + stepBoost;
-      const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
-      adjusted = map.unproject([safetyCenterPx.x, safetyCenterPx.y + safetyDeltaPx]);
-      resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
-    }
+  for (let guard = 0; guard < 10; guard += 1) {
+    map.jumpTo({
+      center: [resultCenter.lon, resultCenter.lat],
+      bearing,
+      pitch,
+      zoom,
+      duration: 0,
+    });
+    const verifyHeadPx = map.project([headPoint.lon, headPoint.lat]);
+    let badX = 0;
+    let badY = 0;
+    const safeMinY = minY + 18;
+    const safeMaxY = maxY - 18;
+    const safeMinX = minX + 18;
+    const safeMaxX = maxX - 18;
+
+    if (verifyHeadPx.y < safeMinY) badY = safeMinY - verifyHeadPx.y;
+    else if (verifyHeadPx.y > safeMaxY) badY = safeMaxY - verifyHeadPx.y;
+
+    if (verifyHeadPx.x < safeMinX) badX = safeMinX - verifyHeadPx.x;
+    else if (verifyHeadPx.x > safeMaxX) badX = safeMaxX - verifyHeadPx.x;
+
+    if (badX === 0 && badY === 0) break;
+
+    const boost = guard >= 4 ? 110 : 72;
+    const applyDy = badY === 0 ? 0 : (badY < 0 ? badY - boost : badY + boost);
+    const applyDx = badX === 0 ? 0 : (badX < 0 ? badX - boost : badX + boost);
+
+    const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
+    adjusted = map.unproject([safetyCenterPx.x + applyDx, safetyCenterPx.y + applyDy]);
+    resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
+  }
+
+  for (let hardGuard = 0; hardGuard < 3; hardGuard += 1) {
+    map.jumpTo({
+      center: [resultCenter.lon, resultCenter.lat],
+      bearing,
+      pitch,
+      zoom,
+      duration: 0,
+    });
+    const finalHeadPx = map.project([headPoint.lon, headPoint.lat]);
+    let fixX = 0;
+    let fixY = 0;
+    const HARD_BUF = 24;
+
+    if (finalHeadPx.x < w * 0.02 + HARD_BUF) fixX = (w * 0.02 + HARD_BUF) - finalHeadPx.x;
+    else if (finalHeadPx.x > w * 0.98 - HARD_BUF) fixX = (w * 0.98 - HARD_BUF) - finalHeadPx.x;
+
+    if (finalHeadPx.y < minY + HARD_BUF) fixY = (minY + HARD_BUF) - finalHeadPx.y;
+    else if (finalHeadPx.y > h * 0.98 - HARD_BUF) fixY = (h * 0.98 - HARD_BUF) - finalHeadPx.y;
+
+    if (fixX === 0 && fixY === 0) break;
+    const hardCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
+    adjusted = map.unproject([hardCenterPx.x + fixX, hardCenterPx.y + fixY]);
+    resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
   }
 
   return resultCenter;
