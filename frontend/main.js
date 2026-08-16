@@ -269,8 +269,10 @@ function getActiveCameraConfig() {
     config.viewportMarginX = Math.max(config.viewportMarginX ?? 0, 0.12);
     config.headAnchorY = 0.56;
     config.backOffsetM = Math.max(config.backOffsetM ?? 0, 64);
-    config.lookAheadPoints = Math.min(config.lookAheadPoints ?? 999, 56);
+    config.lookAheadPoints = 92;
     config.focusAheadPoints = Math.min(config.focusAheadPoints ?? 999, 22);
+    config.maxBearingSpeedDegPerSec = Math.max(config.maxBearingSpeedDegPerSec ?? 0, 30);
+    config.bearingSmoothing = Math.max(config.bearingSmoothing ?? 0, 0.03);
     if (isRenderMode) {
       config.zoom += 0.12;
     }
@@ -2101,7 +2103,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     const applyDx = badX === 0 ? 0 : (badX < 0 ? badX - boost : badX + boost);
 
     const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
-    adjusted = map.unproject([safetyCenterPx.x + applyDx, safetyCenterPx.y + applyDy]);
+    adjusted = map.unproject([safetyCenterPx.x - applyDx, safetyCenterPx.y - applyDy]);
     resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
   }
 
@@ -2126,7 +2128,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
     if (fixX === 0 && fixY === 0) break;
     const hardCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
-    adjusted = map.unproject([hardCenterPx.x + fixX, hardCenterPx.y + fixY]);
+    adjusted = map.unproject([hardCenterPx.x - fixX, hardCenterPx.y - fixY]);
     resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
   }
 
@@ -2429,9 +2431,13 @@ function startAnimation() {
           smoothedBearing = rawBearing;
         } else {
           const delta = shortestAngleDelta(smoothedBearing, rawBearing);
-          const smoothedDelta = delta * cfg.bearingSmoothing;
-          const maxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
-          const limitedDelta = Math.max(-maxStep, Math.min(maxStep, smoothedDelta));
+          const absDelta = Math.abs(delta);
+          const turnBoost = absDelta > 25 ? 2.4 : absDelta > 10 ? 1.6 : absDelta > 4 ? 1.25 : 1;
+          const effectiveSmoothing = Math.min(0.22, cfg.bearingSmoothing * turnBoost);
+          const smoothedDelta = delta * effectiveSmoothing;
+          const baseMaxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
+          const dynamicMaxStep = baseMaxStep * (absDelta > 20 ? 1.8 : absDelta > 8 ? 1.35 : 1);
+          const limitedDelta = Math.max(-dynamicMaxStep, Math.min(dynamicMaxStep, smoothedDelta));
           smoothedBearing += limitedDelta;
           
           smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
@@ -3025,9 +3031,13 @@ function setProgress(progress) {
     smoothedBearing = rawBearing;
   } else {
     const delta = shortestAngleDelta(smoothedBearing, rawBearing);
-    const smoothedDelta = delta * cfg.bearingSmoothing;
-    const maxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
-    const limitedDelta = Math.max(-maxStep, Math.min(maxStep, smoothedDelta));
+    const absDelta = Math.abs(delta);
+    const turnBoost = absDelta > 25 ? 2.4 : absDelta > 10 ? 1.6 : absDelta > 4 ? 1.25 : 1;
+    const effectiveSmoothing = Math.min(0.22, cfg.bearingSmoothing * turnBoost);
+    const smoothedDelta = delta * effectiveSmoothing;
+    const baseMaxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
+    const dynamicMaxStep = baseMaxStep * (absDelta > 20 ? 1.8 : absDelta > 8 ? 1.35 : 1);
+    const limitedDelta = Math.max(-dynamicMaxStep, Math.min(dynamicMaxStep, smoothedDelta));
     smoothedBearing += limitedDelta;
     smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
   }
