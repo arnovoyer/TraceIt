@@ -50,7 +50,10 @@ let renderCameraState = {
   smoothedCenter: null,
   smoothedZoom: null,
   smoothedPitch: null,
+  smoothedExtraSide: 0,
 };
+let previewExtraSideSmooth = 0;
+let lastHeadAnchorX = 0.5;
 let renderOutroState = null;
 let previewCanvasSize = { width: null, height: null };
 let renderZoomOffset = 0;
@@ -2051,9 +2054,9 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     marginBottom = Math.max(marginBottom, 0.16);
   }
 
-  let pullStrength = isPortrait ? 0.42 : 0.22;
+  let pullStrength = isPortrait ? 0.34 : 0.18;
   if (needsHardAltitudeSafeY) {
-    pullStrength = 0.68;
+    pullStrength = 0.60;
   }
 
   map.jumpTo({
@@ -2079,15 +2082,22 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const BUFFER_PX = 10;
   const headXTooCloseLeft = headPx.x < minX + 90;
   const headXTooCloseRight = headPx.x > maxX - 90;
+  let baseAnchorX = anchorX;
   if (headXTooCloseLeft) {
     const t = Math.max(0, 1 - (headPx.x - minX) / 90);
-    pullStrength *= 1 + t * 2.0;
-    anchorX = Math.max(0.5, Math.min(0.6, anchorX + t * 0.1));
+    pullStrength *= 1 + t * 0.4;
+    baseAnchorX = Math.max(0.5, Math.min(0.56, anchorX + t * 0.06));
   } else if (headXTooCloseRight) {
     const t = Math.max(0, 1 - (maxX - headPx.x) / 90);
-    pullStrength *= 1 + t * 2.0;
-    anchorX = Math.min(0.5, Math.max(0.4, anchorX - t * 0.1));
+    pullStrength *= 1 + t * 0.4;
+    baseAnchorX = Math.min(0.5, Math.max(0.44, anchorX - t * 0.06));
   }
+  const maxAnchorDelta = 0.004;
+  if (!lastHeadAnchorX || !Number.isFinite(lastHeadAnchorX)) lastHeadAnchorX = baseAnchorX;
+  const rawDeltaAnchor = baseAnchorX - lastHeadAnchorX;
+  const cappedAnchorDelta = Math.max(-maxAnchorDelta, Math.min(maxAnchorDelta, rawDeltaAnchor));
+  anchorX = lastHeadAnchorX + cappedAnchorDelta;
+  lastHeadAnchorX = anchorX;
   const targetX = w * anchorX;
   const targetY = h * anchorY;
 
@@ -2521,8 +2531,10 @@ function startAnimation() {
         const cinematic = computeCinematicOffsets(virtualElapsed, progress);
         
         const turnDistNorm = Math.max(0, 1 - (upcoming.distance / Math.max(60, Math.min(200, activePoints.length * 0.12))));
-        const preSideMeters = upcomingPeak > 35 ? 72 : upcomingPeak > 22 ? 44 : upcomingPeak > 12 ? 20 : 0;
-        const extraSideOffset = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
+        const preSideMeters = upcomingPeak > 35 ? 40 : upcomingPeak > 22 ? 24 : upcomingPeak > 12 ? 10 : 0;
+        const targetExtraSide = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
+        previewExtraSideSmooth = lerp(previewExtraSideSmooth, targetExtraSide, 0.05);
+        const extraSideOffset = previewExtraSideSmooth;
 
         const targetZoom = cfg.zoom + cinematic.zoom;
         const targetPitch = cfg.pitch + cinematic.pitch;
@@ -3170,8 +3182,12 @@ function setProgress(progress) {
   const cinematic = computeCinematicOffsets(virtualElapsed, clampedProgress);
   
   const turnDistNorm = Math.max(0, 1 - (upcoming.distance / Math.max(60, Math.min(200, activePoints.length * 0.12))));
-  const preSideMeters = upcomingPeak > 35 ? 72 : upcomingPeak > 22 ? 44 : upcomingPeak > 12 ? 20 : 0;
-  const extraSideOffset = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
+  const preSideMeters = upcomingPeak > 35 ? 40 : upcomingPeak > 22 ? 24 : upcomingPeak > 12 ? 10 : 0;
+  const targetExtraSide = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
+  const stateSmoothed = renderCameraState.smoothedExtraSide ?? 0;
+  const newSmoothed = lerp(stateSmoothed, targetExtraSide, 0.05);
+  renderCameraState.smoothedExtraSide = newSmoothed;
+  const extraSideOffset = newSmoothed;
 
   const targetZoom = cfg.zoom + cinematic.zoom;
   const targetPitch = cfg.pitch + cinematic.pitch;
