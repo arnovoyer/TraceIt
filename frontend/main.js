@@ -350,7 +350,12 @@ function resetRenderCameraState() {
     lastProgress: null,
     smoothedBearing: null,
     smoothedCenter: null,
+    smoothedZoom: null,
+    smoothedPitch: null,
+    smoothedExtraSide: 0,
   };
+  previewExtraSideSmooth = 0;
+  lastHeadAnchorX = 0.5;
   renderOutroState = null;
 }
 
@@ -2499,10 +2504,10 @@ function startAnimation() {
         const distanceFromEnd = activePoints.length - 1 - segmentIndex;
         const upcoming = detectUpcomingTurn(activePoints, segmentIndex);
         const upcomingPeak = upcoming.peakDeltaDeg;
-        const preTurnBoost = upcomingPeak > 35 ? 1.6 : upcomingPeak > 22 ? 1.3 : upcomingPeak > 12 ? 1.1 : 1;
+        const preTurnBoost = upcomingPeak > 35 ? 1.35 : upcomingPeak > 22 ? 1.18 : upcomingPeak > 12 ? 1.06 : 1;
         const dynamicLookAhead = Math.max(
           Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd)),
-          preTurnBoost > 1.2 ? Math.min(220, Math.max(upcoming.peakIndex - segmentIndex, Math.floor(cfg.lookAheadPoints * 1.25))) : 0
+          preTurnBoost > 1.1 ? Math.floor(cfg.lookAheadPoints * 1.2) : 0
         );
         const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
         
@@ -2546,9 +2551,9 @@ function startAnimation() {
         const cinematic = computeCinematicOffsets(virtualElapsed, progress);
         
         const turnDistNorm = Math.max(0, 1 - (upcoming.distance / Math.max(60, Math.min(200, activePoints.length * 0.12))));
-        const preSideMeters = upcomingPeak > 35 ? 40 : upcomingPeak > 22 ? 24 : upcomingPeak > 12 ? 10 : 0;
+        const preSideMeters = upcomingPeak > 35 ? 20 : upcomingPeak > 22 ? 12 : upcomingPeak > 12 ? 4 : 0;
         const targetExtraSide = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
-        previewExtraSideSmooth = lerp(previewExtraSideSmooth, targetExtraSide, 0.05);
+        previewExtraSideSmooth = lerp(previewExtraSideSmooth, targetExtraSide, 0.04);
         const extraSideOffset = previewExtraSideSmooth;
 
         const targetZoom = cfg.zoom + cinematic.zoom;
@@ -3145,10 +3150,10 @@ function setProgress(progress) {
   const distanceFromEnd = activePoints.length - 1 - segmentIndex;
   const upcoming = detectUpcomingTurn(activePoints, segmentIndex);
   const upcomingPeak = upcoming.peakDeltaDeg;
-  const preTurnBoost = upcomingPeak > 35 ? 1.6 : upcomingPeak > 22 ? 1.3 : upcomingPeak > 12 ? 1.1 : 1;
+  const preTurnBoost = upcomingPeak > 35 ? 1.35 : upcomingPeak > 22 ? 1.18 : upcomingPeak > 12 ? 1.06 : 1;
   const dynamicLookAhead = Math.max(
     Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd)),
-    preTurnBoost > 1.2 ? Math.min(220, Math.max(upcoming.peakIndex - segmentIndex, Math.floor(cfg.lookAheadPoints * 1.25))) : 0
+    preTurnBoost > 1.1 ? Math.floor(cfg.lookAheadPoints * 1.2) : 0
   );
   const dynamicFocusAhead = Math.min(cfg.focusAheadPoints, Math.max(2, Math.floor(distanceFromEnd / 2)));
   
@@ -3197,10 +3202,10 @@ function setProgress(progress) {
   const cinematic = computeCinematicOffsets(virtualElapsed, clampedProgress);
   
   const turnDistNorm = Math.max(0, 1 - (upcoming.distance / Math.max(60, Math.min(200, activePoints.length * 0.12))));
-  const preSideMeters = upcomingPeak > 35 ? 40 : upcomingPeak > 22 ? 24 : upcomingPeak > 12 ? 10 : 0;
+  const preSideMeters = upcomingPeak > 35 ? 20 : upcomingPeak > 22 ? 12 : upcomingPeak > 12 ? 4 : 0;
   const targetExtraSide = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
   const stateSmoothed = renderCameraState.smoothedExtraSide ?? 0;
-  const newSmoothed = lerp(stateSmoothed, targetExtraSide, 0.05);
+  const newSmoothed = lerp(stateSmoothed, targetExtraSide, 0.04);
   renderCameraState.smoothedExtraSide = newSmoothed;
   const extraSideOffset = newSmoothed;
 
