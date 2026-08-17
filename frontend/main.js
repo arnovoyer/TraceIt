@@ -2131,6 +2131,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const centerPx = map.project([rawCenter.lon, rawCenter.lat]);
   let adjusted = map.unproject([centerPx.x + dx, centerPx.y + dy]);
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
+  const MAX_CORRECTION_PX = 52;
 
   for (let guard = 0; guard < 10; guard += 1) {
     map.jumpTo({
@@ -2156,9 +2157,15 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
     if (badX === 0 && badY === 0) break;
 
-    const boost = guard >= 4 ? 110 : 72;
-    const applyDy = badY === 0 ? 0 : (badY < 0 ? badY - boost : badY + boost);
-    const applyDx = badX === 0 ? 0 : (badX < 0 ? badX - boost : badX + boost);
+    const boost = guard >= 4 ? 1.0 : 0.6;
+    let applyDy = badY === 0 ? 0 : badY * boost;
+    let applyDx = badX === 0 ? 0 : badX * boost;
+    const magnitude = Math.sqrt(applyDx * applyDx + applyDy * applyDy);
+    if (magnitude > MAX_CORRECTION_PX) {
+      const scale = MAX_CORRECTION_PX / magnitude;
+      applyDx *= scale;
+      applyDy *= scale;
+    }
 
     const safetyCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
     adjusted = map.unproject([safetyCenterPx.x - applyDx, safetyCenterPx.y - applyDy]);
@@ -2185,6 +2192,14 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     else if (finalHeadPx.y > h * 0.98 - HARD_BUF) fixY = (h * 0.98 - HARD_BUF) - finalHeadPx.y;
 
     if (fixX === 0 && fixY === 0) break;
+    const finalMaxPx = 120;
+    const finalMag = Math.sqrt(fixX * fixX + fixY * fixY);
+    if (finalMag > finalMaxPx) {
+      const s = finalMaxPx / finalMag;
+      fixX *= s;
+      fixY *= s;
+    }
+
     const hardCenterPx = map.project([resultCenter.lon, resultCenter.lat]);
     adjusted = map.unproject([hardCenterPx.x - fixX, hardCenterPx.y - fixY]);
     resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
