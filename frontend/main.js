@@ -99,12 +99,12 @@ const CAMERA_CONFIG = {
   outroPitch: 16,
   outroBearing: 0,
   outroPadding: 68,
-  cinematicCycleDuration: 18000,
-  cinematicSideAmplitude: 28,
-  cinematicBackAmplitude: 22,
-  cinematicZoomAmplitude: 0.22,
-  cinematicPitchAmplitude: 4,
-  cinematicHeadBobAmountM: 2.5,
+  cinematicCycleDuration: 36000,
+  cinematicSideAmplitude: 10,
+  cinematicBackAmplitude: 6,
+  cinematicZoomAmplitude: 0.06,
+  cinematicPitchAmplitude: 1.2,
+  cinematicHeadBobAmountM: 0.4,
 };
 
 const FORMAT_CAMERA_OVERRIDES = {
@@ -122,12 +122,12 @@ const FORMAT_CAMERA_OVERRIDES = {
     headAnchorY: 0.62,
     outroPitch: 16,
     outroPadding: 68,
-    cinematicCycleDuration: 18000,
-    cinematicSideAmplitude: 30,
-    cinematicBackAmplitude: 24,
-    cinematicZoomAmplitude: 0.24,
-    cinematicPitchAmplitude: 4.5,
-    cinematicHeadBobAmountM: 2.5,
+    cinematicCycleDuration: 40000,
+    cinematicSideAmplitude: 10,
+    cinematicBackAmplitude: 6,
+    cinematicZoomAmplitude: 0.06,
+    cinematicPitchAmplitude: 1.3,
+    cinematicHeadBobAmountM: 0.4,
   },
   portrait: {
     sideOffsetM: 24,
@@ -152,12 +152,12 @@ const FORMAT_CAMERA_OVERRIDES = {
       left: 58,
       right: 58,
     },
-    cinematicCycleDuration: 19000,
-    cinematicSideAmplitude: 24,
-    cinematicBackAmplitude: 26,
-    cinematicZoomAmplitude: 0.2,
-    cinematicPitchAmplitude: 3.5,
-    cinematicHeadBobAmountM: 2.2,
+    cinematicCycleDuration: 42000,
+    cinematicSideAmplitude: 8,
+    cinematicBackAmplitude: 6,
+    cinematicZoomAmplitude: 0.05,
+    cinematicPitchAmplitude: 1.0,
+    cinematicHeadBobAmountM: 0.35,
   },
 };
 
@@ -2065,9 +2065,9 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     marginBottom = Math.max(marginBottom, 0.16);
   }
 
-  let pullStrength = isPortrait ? 0.34 : 0.18;
+  let pullStrength = isPortrait ? 0.22 : 0.12;
   if (needsHardAltitudeSafeY) {
-    pullStrength = 0.60;
+    pullStrength = 0.42;
   }
 
   map.jumpTo({
@@ -2091,19 +2091,21 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const maxX = w * (1 - marginX);
   const maxY = h * (1 - marginBottom);
   const BUFFER_PX = 10;
-  const headXTooCloseLeft = headPx.x < minX + 90;
-  const headXTooCloseRight = headPx.x > maxX - 90;
+  const SOFT_ZONE_X = 110;
+  const SOFT_ZONE_Y = needsHardAltitudeSafeY ? 120 : 90;
+  const headXTooCloseLeft = headPx.x < minX + SOFT_ZONE_X;
+  const headXTooCloseRight = headPx.x > maxX - SOFT_ZONE_X;
   let baseAnchorX = anchorX;
   if (headXTooCloseLeft) {
-    const t = Math.max(0, 1 - (headPx.x - minX) / 90);
-    pullStrength *= 1 + t * 0.4;
-    baseAnchorX = Math.max(0.5, Math.min(0.56, anchorX + t * 0.06));
+    const t = Math.max(0, 1 - (headPx.x - minX) / SOFT_ZONE_X);
+    pullStrength *= 1 + t * 0.22;
+    baseAnchorX = Math.max(0.5, Math.min(0.545, anchorX + t * 0.045));
   } else if (headXTooCloseRight) {
-    const t = Math.max(0, 1 - (maxX - headPx.x) / 90);
-    pullStrength *= 1 + t * 0.4;
-    baseAnchorX = Math.min(0.5, Math.max(0.44, anchorX - t * 0.06));
+    const t = Math.max(0, 1 - (maxX - headPx.x) / SOFT_ZONE_X);
+    pullStrength *= 1 + t * 0.22;
+    baseAnchorX = Math.min(0.5, Math.max(0.455, anchorX - t * 0.045));
   }
-  const maxAnchorDelta = 0.004;
+  const maxAnchorDelta = 0.003;
   if (!lastHeadAnchorX || !Number.isFinite(lastHeadAnchorX)) lastHeadAnchorX = baseAnchorX;
   const rawDeltaAnchor = baseAnchorX - lastHeadAnchorX;
   const cappedAnchorDelta = Math.max(-maxAnchorDelta, Math.min(maxAnchorDelta, rawDeltaAnchor));
@@ -2116,33 +2118,43 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   let dy = 0;
 
   if (headPx.x < minX) {
-    dx = headPx.x - minX - BUFFER_PX;
+    const overflow = minX - headPx.x;
+    dx = -(overflow + BUFFER_PX) * 0.68;
   } else if (headPx.x > maxX) {
-    dx = headPx.x - maxX + BUFFER_PX;
+    const overflow = headPx.x - maxX;
+    dx = (overflow + BUFFER_PX) * 0.68;
   } else {
-    dx = (headPx.x - targetX) * pullStrength;
+    const leftNorm = Math.max(0, 1 - (headPx.x - minX) / SOFT_ZONE_X);
+    const rightNorm = Math.max(0, 1 - (maxX - headPx.x) / SOFT_ZONE_X);
+    const softPull = (rightNorm - leftNorm) * SOFT_ZONE_X * 0.22;
+    dx = (headPx.x - targetX) * pullStrength + softPull;
   }
 
   if (headPx.y < minY) {
-    dy = headPx.y - minY - BUFFER_PX;
+    const overflow = minY - headPx.y;
+    dy = -(overflow + BUFFER_PX) * 0.68;
     if (needsHardAltitudeSafeY) {
-      dy -= 44;
+      dy -= 26;
     }
   } else if (headPx.y > maxY) {
-    dy = headPx.y - maxY + BUFFER_PX;
+    const overflow = headPx.y - maxY;
+    dy = (overflow + BUFFER_PX) * 0.68;
   } else {
-    if (needsHardAltitudeSafeY && headPx.y < minY + 110) {
-      const t = 1 - Math.max(0, (headPx.y - minY) / 110);
-      dy = (headPx.y - targetY) * pullStrength - t * 62;
-    } else {
-      dy = (headPx.y - targetY) * pullStrength;
+    const topNorm = Math.max(0, 1 - (headPx.y - minY) / SOFT_ZONE_Y);
+    const bottomNorm = Math.max(0, 1 - (maxY - headPx.y) / SOFT_ZONE_Y);
+    const softPullY = (bottomNorm - topNorm) * SOFT_ZONE_Y * 0.22;
+    let basePull = (headPx.y - targetY) * pullStrength + softPullY;
+    if (needsHardAltitudeSafeY && headPx.y < minY + SOFT_ZONE_Y) {
+      const t = 1 - Math.max(0, (headPx.y - minY) / SOFT_ZONE_Y);
+      basePull -= t * 30;
     }
+    dy = basePull;
   }
 
   const centerPx = map.project([rawCenter.lon, rawCenter.lat]);
   let adjusted = map.unproject([centerPx.x + dx, centerPx.y + dy]);
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
-  const MAX_CORRECTION_PX = 52;
+  const MAX_CORRECTION_PX = 36;
 
   for (let guard = 0; guard < 10; guard += 1) {
     map.jumpTo({
@@ -2168,7 +2180,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
     if (badX === 0 && badY === 0) break;
 
-    const boost = guard >= 4 ? 1.0 : 0.6;
+    const boost = guard >= 4 ? 0.85 : 0.5;
     let applyDy = badY === 0 ? 0 : badY * boost;
     let applyDx = badX === 0 ? 0 : badX * boost;
     const magnitude = Math.sqrt(applyDx * applyDx + applyDy * applyDy);
@@ -2203,7 +2215,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     else if (finalHeadPx.y > h * 0.98 - HARD_BUF) fixY = (h * 0.98 - HARD_BUF) - finalHeadPx.y;
 
     if (fixX === 0 && fixY === 0) break;
-    const finalMaxPx = 120;
+    const finalMaxPx = 88;
     const finalMag = Math.sqrt(fixX * fixX + fixY * fixY);
     if (finalMag > finalMaxPx) {
       const s = finalMaxPx / finalMag;
@@ -2510,7 +2522,7 @@ function startAnimation() {
         const distanceFromEnd = activePoints.length - 1 - segmentIndex;
         const upcoming = detectUpcomingTurn(activePoints, segmentIndex);
         const upcomingPeak = upcoming.peakDeltaDeg;
-        const preTurnBoost = upcomingPeak > 35 ? 1.35 : upcomingPeak > 22 ? 1.18 : upcomingPeak > 12 ? 1.06 : 1;
+        const preTurnBoost = upcomingPeak > 35 ? 1.15 : upcomingPeak > 22 ? 1.09 : upcomingPeak > 12 ? 1.03 : 1;
         const dynamicLookAhead = Math.max(
           Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd)),
           preTurnBoost > 1.1 ? Math.floor(cfg.lookAheadPoints * 1.2) : 0
@@ -2528,13 +2540,13 @@ function startAnimation() {
         } else {
           const delta = shortestAngleDelta(smoothedBearing, rawBearing);
           const absDelta = Math.abs(delta);
-          const turnBoost = absDelta > 25 ? 1.8 : absDelta > 10 ? 1.35 : absDelta > 4 ? 1.12 : 1;
+          const turnBoost = absDelta > 25 ? 1.4 : absDelta > 10 ? 1.18 : absDelta > 4 ? 1.05 : 1;
           const totalBoost = Math.max(turnBoost, preTurnBoost);
-          const effectiveSmoothing = Math.min(0.2, cfg.bearingSmoothing * totalBoost);
+          const effectiveSmoothing = Math.min(0.13, cfg.bearingSmoothing * totalBoost);
           const smoothedDelta = delta * effectiveSmoothing;
           const baseMaxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
           const stepMult = Math.max(
-            absDelta > 20 ? 1.4 : absDelta > 8 ? 1.2 : 1,
+            absDelta > 20 ? 1.15 : absDelta > 8 ? 1.08 : 1,
             preTurnBoost > 1.2 ? preTurnBoost : 1
           );
           const dynamicMaxStep = baseMaxStep * stepMult;
@@ -2557,21 +2569,21 @@ function startAnimation() {
         const cinematic = computeCinematicOffsets(virtualElapsed, progress);
         
         const turnDistNorm = Math.max(0, 1 - (upcoming.distance / Math.max(60, Math.min(200, activePoints.length * 0.12))));
-        const preSideMeters = upcomingPeak > 35 ? 20 : upcomingPeak > 22 ? 12 : upcomingPeak > 12 ? 4 : 0;
+        const preSideMeters = upcomingPeak > 35 ? 8 : upcomingPeak > 22 ? 5 : upcomingPeak > 12 ? 2 : 0;
         const targetExtraSide = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
-        previewExtraSideSmooth = lerp(previewExtraSideSmooth, targetExtraSide, 0.04);
+        previewExtraSideSmooth = lerp(previewExtraSideSmooth, targetExtraSide, 0.018);
         const extraSideOffset = previewExtraSideSmooth;
 
         const targetZoom = cfg.zoom + cinematic.zoom;
         const targetPitch = cfg.pitch + cinematic.pitch;
 
         const isPortraitAltitude = getSelectedFormatKey() === "portrait" && isAltitudeOverlayVisible;
-        const initialBoost = progress < 0.18 ? 1.75 : 1;
-        const centerSmoothBoost = isPortraitAltitude ? 2.4 * initialBoost : 1;
-        const zoomPitchSmoothBoost = isPortraitAltitude ? 1.9 * initialBoost : 1;
+        const initialBoost = progress < 0.08 ? 1.3 : 1;
+        const centerSmoothBoost = isPortraitAltitude ? 1.6 * initialBoost : 1;
+        const zoomPitchSmoothBoost = isPortraitAltitude ? 1.3 * initialBoost : 1;
 
-        const effectiveCenterSmoothing = Math.min(0.75, cfg.centerSmoothing * centerSmoothBoost);
-        const effectiveZoomPitchSmoothing = Math.min(0.65, cfg.centerSmoothing * 1.4 * zoomPitchSmoothBoost);
+        const effectiveCenterSmoothing = Math.min(0.45, cfg.centerSmoothing * centerSmoothBoost);
+        const effectiveZoomPitchSmoothing = Math.min(0.40, cfg.centerSmoothing * 1.4 * zoomPitchSmoothBoost);
 
         if (smoothedZoom === null || !Number.isFinite(smoothedZoom)) smoothedZoom = targetZoom;
         else smoothedZoom = lerp(smoothedZoom, targetZoom, effectiveZoomPitchSmoothing);
@@ -3156,7 +3168,7 @@ function setProgress(progress) {
   const distanceFromEnd = activePoints.length - 1 - segmentIndex;
   const upcoming = detectUpcomingTurn(activePoints, segmentIndex);
   const upcomingPeak = upcoming.peakDeltaDeg;
-  const preTurnBoost = upcomingPeak > 35 ? 1.35 : upcomingPeak > 22 ? 1.18 : upcomingPeak > 12 ? 1.06 : 1;
+  const preTurnBoost = upcomingPeak > 35 ? 1.15 : upcomingPeak > 22 ? 1.09 : upcomingPeak > 12 ? 1.03 : 1;
   const dynamicLookAhead = Math.max(
     Math.min(cfg.lookAheadPoints, Math.max(3, distanceFromEnd)),
     preTurnBoost > 1.1 ? Math.floor(cfg.lookAheadPoints * 1.2) : 0
@@ -3179,13 +3191,13 @@ function setProgress(progress) {
   } else {
     const delta = shortestAngleDelta(smoothedBearing, rawBearing);
     const absDelta = Math.abs(delta);
-    const turnBoost = absDelta > 25 ? 1.8 : absDelta > 10 ? 1.35 : absDelta > 4 ? 1.12 : 1;
+    const turnBoost = absDelta > 25 ? 1.4 : absDelta > 10 ? 1.18 : absDelta > 4 ? 1.05 : 1;
     const totalBoost = Math.max(turnBoost, preTurnBoost);
-    const effectiveSmoothing = Math.min(0.2, cfg.bearingSmoothing * totalBoost);
+    const effectiveSmoothing = Math.min(0.13, cfg.bearingSmoothing * totalBoost);
     const smoothedDelta = delta * effectiveSmoothing;
     const baseMaxStep = (cfg.maxBearingSpeedDegPerSec * dtMs) / 1000;
     const stepMult = Math.max(
-      absDelta > 20 ? 1.4 : absDelta > 8 ? 1.2 : 1,
+      absDelta > 20 ? 1.15 : absDelta > 8 ? 1.08 : 1,
       preTurnBoost > 1.2 ? preTurnBoost : 1
     );
     const dynamicMaxStep = baseMaxStep * stepMult;
@@ -3208,10 +3220,10 @@ function setProgress(progress) {
   const cinematic = computeCinematicOffsets(virtualElapsed, clampedProgress);
   
   const turnDistNorm = Math.max(0, 1 - (upcoming.distance / Math.max(60, Math.min(200, activePoints.length * 0.12))));
-  const preSideMeters = upcomingPeak > 35 ? 20 : upcomingPeak > 22 ? 12 : upcomingPeak > 12 ? 4 : 0;
+  const preSideMeters = upcomingPeak > 35 ? 8 : upcomingPeak > 22 ? 5 : upcomingPeak > 12 ? 2 : 0;
   const targetExtraSide = upcoming.sign !== 0 ? (-upcoming.sign) * preSideMeters * Math.max(0, Math.min(1, turnDistNorm)) : 0;
   const stateSmoothed = renderCameraState.smoothedExtraSide ?? 0;
-  const newSmoothed = lerp(stateSmoothed, targetExtraSide, 0.04);
+  const newSmoothed = lerp(stateSmoothed, targetExtraSide, 0.018);
   renderCameraState.smoothedExtraSide = newSmoothed;
   const extraSideOffset = newSmoothed;
 
@@ -3219,12 +3231,12 @@ function setProgress(progress) {
   const targetPitch = cfg.pitch + cinematic.pitch;
 
   const isPortraitAltitude = getSelectedFormatKey() === "portrait" && isAltitudeOverlayVisible;
-  const initialBoost = clampedProgress < 0.18 ? 1.75 : 1;
-  const centerSmoothBoost = isPortraitAltitude ? 2.4 * initialBoost : 1;
-  const zoomPitchSmoothBoost = isPortraitAltitude ? 1.9 * initialBoost : 1;
+  const initialBoost = clampedProgress < 0.08 ? 1.3 : 1;
+  const centerSmoothBoost = isPortraitAltitude ? 1.6 * initialBoost : 1;
+  const zoomPitchSmoothBoost = isPortraitAltitude ? 1.3 * initialBoost : 1;
 
-  const effectiveCenterSmoothing = Math.min(0.75, cfg.centerSmoothing * centerSmoothBoost);
-  const effectiveZoomPitchSmoothing = Math.min(0.65, cfg.centerSmoothing * 1.4 * zoomPitchSmoothBoost);
+  const effectiveCenterSmoothing = Math.min(0.45, cfg.centerSmoothing * centerSmoothBoost);
+  const effectiveZoomPitchSmoothing = Math.min(0.40, cfg.centerSmoothing * 1.4 * zoomPitchSmoothBoost);
 
   let smoothedZoom = renderCameraState.smoothedZoom;
   if (smoothedZoom === null || !Number.isFinite(smoothedZoom)) smoothedZoom = targetZoom;
