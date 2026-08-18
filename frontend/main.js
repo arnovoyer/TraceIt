@@ -1662,15 +1662,97 @@ function sanitizeAndSamplePoints(points) {
   return sampled;
 }
 
-function smoothRoutePoints(points, windowSize = 20) {
+function computeBearingDeg(a, b) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const toDeg = (rad) => (rad * 180) / Math.PI;
+  const dLon = toRad(b.lon - a.lon);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) -
+            Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const brng = Math.atan2(y, x);
+  return ((toDeg(brng) + 360) % 360);
+}
+
+function shortestAngleDeltaDeg(a, b) {
+  let d = b - a;
+  while (d > 180) d -= 360;
+  while (d < -180) d += 360;
+  return d;
+}
+
+function smartEdgePreservingSmooth(points, softWindow = 12, hardPasses = 2) {
+  if (points.length < 5) return points;
+
+  const N = points.length;
+  const lookStep = 5;
+  const sharp = new Uint8Array(N);
+  for (let i = lookStep; i < N - lookStep; i += 1) {
+    const prev = points[i - lookStep];
+    const cur = points[i];
+    const next = points[i + lookStep];
+    const bIn = computeBearingDeg(prev, cur);
+    const bOut = computeBearingDeg(cur, next);
+    const delta = Math.abs(shortestAngleDeltaDeg(bIn, bOut));
+    if (delta > 48) sharp[i] = 3;
+    else if (delta > 28) sharp[i] = 2;
+    else if (delta > 12) sharp[i] = 1;
+  }
+
+  for (let r = 0; r < 6; r += 1) {
+    for (let i = lookStep; i < N - lookStep; i += 1) {
+      if (sharp[i] === 0) continue;
+      for (let k = 1; k <= lookStep + 3; k += 1) {
+        if (i - k >= 0 && sharp[i - k] < Math.max(0, sharp[i] - 1)) {
+          sharp[i - k] = Math.max(sharp[i - k], Math.max(0, sharp[i] - 1));
+        }
+        if (i + k < N && sharp[i + k] < Math.max(0, sharp[i] - 1)) {
+          sharp[i + k] = Math.max(sharp[i + k], Math.max(0, sharp[i] - 1));
+        }
+      }
+    }
+  }
+
+  let work = points.map(p => ({ lon: p.lon, lat: p.lat, ele: p.ele }));
+  for (let pass = 0; pass < hardPasses; pass += 1) {
+    const smoothed = [];
+    for (let i = 0; i < N; i += 1) {
+      const s = sharp[i];
+      const w = s === 3 ? 3 : s === 2 ? 5 : s === 1 ? 8 : softWindow;
+      const start = Math.max(0, i - w);
+      const end = Math.min(N - 1, i + w);
+      let count = 0;
+      let sumLon = 0, sumLat = 0, sumEle = 0;
+      for (let j = start; j <= end; j += 1) {
+        const weight = j === i ? 2.2 : (sharp[j] >= 2 && s < 2 ? 0.4 : 1.0);
+        sumLon += work[j].lon * weight;
+        sumLat += work[j].lat * weight;
+        sumEle += work[j].ele * weight;
+        count += weight;
+      }
+      smoothed.push({
+        lon: sumLon / count,
+        lat: sumLat / count,
+        ele: sumEle / count,
+      });
+    }
+    work = smoothed;
+  }
+
+  work[0] = { lon: points[0].lon, lat: points[0].lat, ele: points[0].ele };
+  work[N - 1] = { lon: points[N - 1].lon, lat: points[N - 1].lat, ele: points[N - 1].ele };
+  return work;
+}
+
+function smoothRoutePoints(points, windowSize = 16) {
   if (points.length < 3) {
     return points;
   }
 
   let currentPoints = [...points];
   
-  // Apply smoothing multiple times for ultra-smooth result
-  for (let pass = 0; pass < 5; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     const smoothed = [];
     for (let i = 0; i < currentPoints.length; i += 1) {
       const start = Math.max(0, i - windowSize);
