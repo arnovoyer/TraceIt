@@ -1610,7 +1610,10 @@ function updateAltitudeOverlayProgress(progress) {
   }
 
   const clamped = Math.min(1, Math.max(0, progress));
-  altitudeClipRect.setAttribute("width", String(altitudeOverlayState.width * clamped));
+  const { leftPad, rightPad, width } = ALTITUDE_SVG;
+  const plotWidth = Math.max(1, width - leftPad - rightPad);
+  altitudeClipRect.setAttribute("x", String(leftPad));
+  altitudeClipRect.setAttribute("width", String(Math.max(0, plotWidth * clamped)));
 }
 
 function renderAltitudeOverlay(points) {
@@ -1626,7 +1629,10 @@ function renderAltitudeOverlay(points) {
   altitudeAreaDone.setAttribute("d", data.areaPath);
   altitudeLineBg.setAttribute("d", data.linePath);
   altitudeLineDone.setAttribute("d", data.linePath);
+  altitudeClipRect.setAttribute("x", String(ALTITUDE_SVG.leftPad));
+  altitudeClipRect.setAttribute("y", "0");
   altitudeClipRect.setAttribute("height", String(data.height));
+  altitudeClipRect.setAttribute("width", "0");
   renderAltitudeMarkers(data);
   updateAltitudeOverlayProgress(0);
   syncAltitudeOverlayVisibility();
