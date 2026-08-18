@@ -2457,8 +2457,9 @@ async function applyParsedGpxData(data) {
   clearPhotoSpots();
 
   const sampledPoints = sanitizeAndSamplePoints(data.points);
-  routePoints = densifyRoutePoints(sampledPoints); // Use 3m steps
-  cameraPoints = smoothRoutePoints(routePoints); // Use 3-pass, 12 window smoothing
+  const densePoints = densifyRoutePoints(sampledPoints);
+  routePoints = smartEdgePreservingSmooth(densePoints);
+  cameraPoints = smoothRoutePoints(routePoints);
   routeInsights = computeRouteInsights(sampledPoints);
   if (routeInsights?.fastest) {
     routeInsights.fastestRouteIndex = findNearestPointIndex(routePoints, routeInsights.fastest);
