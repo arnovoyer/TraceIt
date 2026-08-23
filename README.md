@@ -208,3 +208,4 @@ Wichtig bei Remotion:
 - `points`: Liste aus `lon`, `lat`, `ele`, `time`
 - `line`: GeoJSON Feature (LineString)
 - `pointCount`, `start`, `end`
+
