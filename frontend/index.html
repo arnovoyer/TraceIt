@@ -38,6 +38,11 @@
 
       <section class="status-row">
         <p id="statusText">Warte auf GPX-Datei ...</p>
+        <div class="shortcuts-hint" role="group" aria-label="Tastenkürzel">
+          <span class="shortcut-pill"><span class="shortcut-key">H</span>Höhenprofil</span>
+          <span class="shortcut-pill"><span class="shortcut-key">Leertaste</span>Abspielen</span>
+          <span class="shortcut-pill"><span class="shortcut-key">R</span>Aufnehmen</span>
+        </div>
       </section>
 
       <section id="mapStage">
@@ -75,12 +80,20 @@
                   <stop offset="0%" style="stop-color:#FCD34D;stop-opacity:1" />
                   <stop offset="100%" style="stop-color:#FBBF24;stop-opacity:1" />
                 </linearGradient>
+                <filter id="altitudeCursorShadow" x="-100%" y="-100%" width="300%" height="300%">
+                  <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000" flood-opacity="0.6" />
+                </filter>
               </defs>
               <g id="altitudeMarkers"></g>
               <path id="altitudeAreaBg" d=""></path>
               <path id="altitudeAreaDone" d="" clip-path="url(#altitudeProgressClip)"></path>
               <path id="altitudeLineBg" d=""></path>
               <path id="altitudeLineDone" d="" clip-path="url(#altitudeProgressClip)"></path>
+              <g id="altitudeCursor" transform="translate(28, 59)" opacity="0">
+                <line x1="0" y1="2" x2="0" y2="92" stroke="#FFFFFF" stroke-width="1.2" stroke-opacity="0.62" stroke-dasharray="2 2" />
+                <circle cx="0" cy="0" r="5.2" fill="#FFFFFF" stroke="#FBBF24" stroke-width="1.8" filter="url(#altitudeCursorShadow)" />
+                <circle cx="0" cy="0" r="1.9" fill="#F59E0B" />
+              </g>
             </svg>
           </div>
           <section id="map"></section>

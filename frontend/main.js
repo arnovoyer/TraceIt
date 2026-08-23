@@ -22,6 +22,7 @@ const altitudeLineBg = document.getElementById("altitudeLineBg");
 const altitudeLineDone = document.getElementById("altitudeLineDone");
 const altitudeClipRect = document.getElementById("altitudeClipRect");
 const altitudeMarkers = document.getElementById("altitudeMarkers");
+const altitudeCursor = document.getElementById("altitudeCursor");
 const insightPanel = document.getElementById("insightPanel");
 const maxSpeedValue = document.getElementById("maxSpeedValue");
 const maxElevationValue = document.getElementById("maxElevationValue");
@@ -70,6 +71,7 @@ const PHOTO_SLOWDOWN_RADIUS = 42;
 const PHOTO_SLOWDOWN_STRENGTH = 0.46;
 const PROXIMITY_VISIBLE_RADIUS = 9;
 const SHOW_HIGHEST_INSIGHT = false;
+const OUTRO_DURATION_DEFAULT_MS = 3000;
 
 const ALTITUDE_SVG = {
   width: 320,
@@ -194,10 +196,10 @@ function syncAltitudeToggleButton() {
     return;
   }
 
-  altitudeToggleButton.textContent = isAltitudeOverlayVisible
-    ? "Hoehenprofil ausblenden"
-    : "Hoehenprofil einblenden";
   altitudeToggleButton.setAttribute("aria-pressed", String(isAltitudeOverlayVisible));
+  altitudeToggleButton.title = isAltitudeOverlayVisible
+    ? "Höhenprofil ausblenden (H)"
+    : "Höhenprofil einblenden (H)";
 }
 
 function syncAltitudeOverlayVisibility() {
@@ -544,34 +546,54 @@ function makeMarkerSvg(kind) {
 
   if (kind === "start") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="88" height="112" viewBox="0 0 88 112">
+      <svg xmlns="http://www.w3.org/2000/svg" width="104" height="128" viewBox="0 0 104 128">
         <defs>
-          <filter id="startShadow" x="-60%" y="-60%" width="220%" height="220%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.38"/>
+          <filter id="startShadowNew" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="7" stdDeviation="5.5" flood-color="#000000" flood-opacity="0.46"/>
           </filter>
+          <linearGradient id="startGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#86EFAC" stop-opacity="1"/>
+            <stop offset="55%" stop-color="#22C55E" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#15803D" stop-opacity="1"/>
+          </linearGradient>
+          <radialGradient id="pulseStart" cx="50%" cy="37%" r="45%">
+            <stop offset="0%" stop-color="#86EFAC" stop-opacity="0.65"/>
+            <stop offset="60%" stop-color="#22C55E" stop-opacity="0"/>
+          </radialGradient>
         </defs>
-        <path d="M44 100 L22 58 C14 44 22 28 38 24 L50 24 C66 28 74 44 66 58 Z" fill="#111827" filter="url(#startShadow)"/>
-        <path d="M44 98 L24 58 C17 46 24 31 38 28 L50 28 C64 31 71 46 64 58 Z" fill="#22C55E"/>
-        <circle cx="44" cy="47" r="15" fill="#FFFFFF"/>
-        <circle cx="44" cy="47" r="15" fill="none" stroke="#16A34A" stroke-width="2.5"/>
-        <circle cx="44" cy="47" r="6" fill="#22C55E"/>
+        <circle cx="52" cy="47" r="36" fill="url(#pulseStart)" opacity="0.75"/>
+        <circle cx="52" cy="47" r="28" fill="none" stroke="#86EFAC" stroke-width="2" stroke-opacity="0.35"/>
+        <path d="M52 116 L26 66 C16 48 26 30 46 24 L58 24 C78 30 88 48 78 66 Z" fill="#0b1220" filter="url(#startShadowNew)"/>
+        <path d="M52 114 L28 66 C20 50 28 33 45 28 L59 28 C76 33 84 50 76 66 Z" fill="url(#startGrad)"/>
+        <circle cx="52" cy="51" r="18" fill="#FFFFFF" stroke="#16A34A" stroke-width="2.6"/>
+        <text x="52" y="59" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-weight="800" font-size="22" fill="#16A34A" letter-spacing="-0.5px">S</text>
       </svg>
     `;
   }
 
   if (kind === "target") {
     return `
-      <svg xmlns="http://www.w3.org/2000/svg" width="88" height="112" viewBox="0 0 88 112">
+      <svg xmlns="http://www.w3.org/2000/svg" width="104" height="128" viewBox="0 0 104 128">
         <defs>
-          <filter id="targetShadow" x="-60%" y="-60%" width="220%" height="220%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#000000" flood-opacity="0.38"/>
+          <filter id="targetShadowNew" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="7" stdDeviation="5.5" flood-color="#000000" flood-opacity="0.46"/>
           </filter>
+          <linearGradient id="targetGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FCA5A5" stop-opacity="1"/>
+            <stop offset="55%" stop-color="#EF4444" stop-opacity="1"/>
+            <stop offset="100%" stop-color="#B91C1C" stop-opacity="1"/>
+          </linearGradient>
+          <radialGradient id="pulseTarget" cx="50%" cy="37%" r="45%">
+            <stop offset="0%" stop-color="#FCA5A5" stop-opacity="0.65"/>
+            <stop offset="60%" stop-color="#EF4444" stop-opacity="0"/>
+          </radialGradient>
         </defs>
-        <path d="M44 100 L22 58 C14 44 22 28 38 24 L50 24 C66 28 74 44 66 58 Z" fill="#111827" filter="url(#targetShadow)"/>
-        <path d="M44 98 L24 58 C17 46 24 31 38 28 L50 28 C64 31 71 46 64 58 Z" fill="#EF4444"/>
-        <circle cx="44" cy="47" r="15" fill="#FFFFFF"/>
-        <circle cx="44" cy="47" r="15" fill="none" stroke="#DC2626" stroke-width="2.5"/>
-        <circle cx="44" cy="47" r="6" fill="#EF4444"/>
+        <circle cx="52" cy="47" r="36" fill="url(#pulseTarget)" opacity="0.75"/>
+        <circle cx="52" cy="47" r="28" fill="none" stroke="#FCA5A5" stroke-width="2" stroke-opacity="0.35"/>
+        <path d="M52 116 L26 66 C16 48 26 30 46 24 L58 24 C78 30 88 48 78 66 Z" fill="#0b1220" filter="url(#targetShadowNew)"/>
+        <path d="M52 114 L28 66 C20 50 28 33 45 28 L59 28 C76 33 84 50 76 66 Z" fill="url(#targetGrad)"/>
+        <circle cx="52" cy="51" r="18" fill="#FFFFFF" stroke="#DC2626" stroke-width="2.6"/>
+        <text x="52" y="59" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-weight="800" font-size="22" fill="#DC2626" letter-spacing="-0.5px">Z</text>
       </svg>
     `;
   }
@@ -1610,10 +1632,38 @@ function updateAltitudeOverlayProgress(progress) {
   }
 
   const clamped = Math.min(1, Math.max(0, progress));
-  const { leftPad, rightPad, width } = ALTITUDE_SVG;
+  const { leftPad, rightPad, width, points } = ALTITUDE_SVG;
   const plotWidth = Math.max(1, width - leftPad - rightPad);
   altitudeClipRect.setAttribute("x", String(leftPad));
   altitudeClipRect.setAttribute("width", String(Math.max(0, plotWidth * clamped)));
+
+  if (altitudeCursor && points && points.length >= 2) {
+    const targetX = leftPad + plotWidth * clamped;
+    let closestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < points.length; i += 1) {
+      const d = Math.abs(points[i].x - targetX);
+      if (d < bestDist) {
+        bestDist = d;
+        closestIdx = i;
+      }
+    }
+    let cursorY = points[closestIdx].y;
+    if (closestIdx > 0 && closestIdx < points.length - 1) {
+      const prev = points[closestIdx - 1];
+      const cur = points[closestIdx];
+      const next = points[closestIdx + 1];
+      const usePrev = targetX <= cur.x;
+      const a = usePrev ? prev : cur;
+      const b = usePrev ? cur : next;
+      if (Math.abs(b.x - a.x) > 0.001) {
+        const t = (targetX - a.x) / (b.x - a.x);
+        cursorY = a.y + (b.y - a.y) * Math.max(0, Math.min(1, t));
+      }
+    }
+    altitudeCursor.setAttribute("transform", `translate(${targetX.toFixed(2)}, ${cursorY.toFixed(2)})`);
+    altitudeCursor.setAttribute("opacity", String(1));
+  }
 }
 
 function renderAltitudeOverlay(points) {
@@ -1634,6 +1684,11 @@ function renderAltitudeOverlay(points) {
   altitudeClipRect.setAttribute("height", String(data.height));
   altitudeClipRect.setAttribute("width", "0");
   renderAltitudeMarkers(data);
+  if (altitudeCursor && data.points && data.points.length > 0) {
+    const p0 = data.points[0];
+    altitudeCursor.setAttribute("transform", `translate(${p0.x.toFixed(2)}, ${p0.y.toFixed(2)})`);
+    altitudeCursor.setAttribute("opacity", String(0.98));
+  }
   updateAltitudeOverlayProgress(0);
   syncAltitudeOverlayVisibility();
 }
@@ -2165,8 +2220,9 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const h = canvas.height;
 
   let minY = h * marginTop;
+  const extraAltitudeBufPx = needsHardAltitudeSafeY ? 56 : 0;
   if (needsHardAltitudeSafeY) {
-    minY = getAltitudeOverlaySafeBottomPx(canvas) + 36;
+    minY = getAltitudeOverlaySafeBottomPx(canvas) + 36 + extraAltitudeBufPx;
   }
 
   const minX = w * marginX;
@@ -2174,7 +2230,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const maxY = h * (1 - marginBottom);
   const BUFFER_PX = 10;
   const SOFT_ZONE_X = 110;
-  const SOFT_ZONE_Y = needsHardAltitudeSafeY ? 120 : 90;
+  const SOFT_ZONE_Y = needsHardAltitudeSafeY ? 150 : 90;
   const headXTooCloseLeft = headPx.x < minX + SOFT_ZONE_X;
   const headXTooCloseRight = headPx.x > maxX - SOFT_ZONE_X;
   let baseAnchorX = anchorX;
@@ -2236,9 +2292,10 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
   const centerPx = map.project([rawCenter.lon, rawCenter.lat]);
   let adjusted = map.unproject([centerPx.x + dx, centerPx.y + dy]);
   let resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
-  const MAX_CORRECTION_PX = 36;
+  const MAX_CORRECTION_PX = needsHardAltitudeSafeY ? 46 : 36;
+  const GUARD_ROUNDS = needsHardAltitudeSafeY ? 13 : 10;
 
-  for (let guard = 0; guard < 10; guard += 1) {
+  for (let guard = 0; guard < GUARD_ROUNDS; guard += 1) {
     map.jumpTo({
       center: [resultCenter.lon, resultCenter.lat],
       bearing,
@@ -2262,7 +2319,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
 
     if (badX === 0 && badY === 0) break;
 
-    const boost = guard >= 4 ? 0.85 : 0.5;
+    const boost = guard >= 5 ? 0.92 : 0.5;
     let applyDy = badY === 0 ? 0 : badY * boost;
     let applyDx = badX === 0 ? 0 : badX * boost;
     const magnitude = Math.sqrt(applyDx * applyDx + applyDy * applyDy);
@@ -2277,7 +2334,8 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     resultCenter = { lon: adjusted.lng, lat: adjusted.lat };
   }
 
-  for (let hardGuard = 0; hardGuard < 3; hardGuard += 1) {
+  const HARD_ROUNDS = needsHardAltitudeSafeY ? 4 : 3;
+  for (let hardGuard = 0; hardGuard < HARD_ROUNDS; hardGuard += 1) {
     map.jumpTo({
       center: [resultCenter.lon, resultCenter.lat],
       bearing,
@@ -2288,7 +2346,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     const finalHeadPx = map.project([headPoint.lon, headPoint.lat]);
     let fixX = 0;
     let fixY = 0;
-    const HARD_BUF = 24;
+    const HARD_BUF = needsHardAltitudeSafeY ? 36 : 24;
 
     if (finalHeadPx.x < w * 0.02 + HARD_BUF) fixX = (w * 0.02 + HARD_BUF) - finalHeadPx.x;
     else if (finalHeadPx.x > w * 0.98 - HARD_BUF) fixX = (w * 0.98 - HARD_BUF) - finalHeadPx.x;
@@ -2297,7 +2355,7 @@ function keepRouteHeadInViewport(rawCenter, headPoint, bearing, pitch, zoom) {
     else if (finalHeadPx.y > h * 0.98 - HARD_BUF) fixY = (h * 0.98 - HARD_BUF) - finalHeadPx.y;
 
     if (fixX === 0 && fixY === 0) break;
-    const finalMaxPx = 88;
+    const finalMaxPx = needsHardAltitudeSafeY ? 96 : 88;
     const finalMag = Math.sqrt(fixX * fixX + fixY * fixY);
     if (finalMag > finalMaxPx) {
       const s = finalMaxPx / finalMag;
@@ -2737,6 +2795,14 @@ function startAnimation() {
           smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
         }
 
+        const outroStartProgressAnim = 1 - (OUTRO_DURATION_DEFAULT_MS / Math.max(6000, durationMs));
+        if (progress >= outroStartProgressAnim) {
+          const outroT = Math.min(1, Math.max(0, (progress - outroStartProgressAnim) / Math.max(0.0001, 1 - outroStartProgressAnim)));
+          setOutroProgress(outroT);
+        } else {
+          renderOutroState = null;
+        }
+
         if (!reachedHighlight.fastest && routeInsights?.fastest && routeInsights.fastestRouteIndex >= 0) {
           if (Math.abs(segmentIndex - routeInsights.fastestRouteIndex) <= 5) {
             reachedHighlight.fastest = true;
@@ -3147,6 +3213,36 @@ showEndpointsToggle?.addEventListener("change", async () => {
   setStatus(`Start/Ziel Marker ${showEndpoints ? "eingeblendet" : "ausgeblendet"}.`);
 });
 
+document.addEventListener("keydown", (event) => {
+  if (!event || event.repeat) return;
+  const tag = (event.target && typeof event.target.tagName === "string") ? event.target.tagName : "";
+  if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+
+  const key = event.key;
+
+  if (key === "h" || key === "H") {
+    event.preventDefault();
+    altitudeToggleButton?.click();
+    return;
+  }
+
+  if (key === " " || event.code === "Space") {
+    event.preventDefault();
+    if (!playButton.disabled) {
+      playButton.click();
+    }
+    return;
+  }
+
+  if (key === "r" || key === "R") {
+    event.preventDefault();
+    if (!recordButton.disabled) {
+      recordButton.click();
+    }
+    return;
+  }
+});
+
 photoInput.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   if (!file) {
@@ -3392,6 +3488,14 @@ function setProgress(progress) {
     const rawDelta = shortestAngleDelta(smoothedBearing, rawBearing);
     smoothedBearing += rawDelta * 0.3;
     smoothedBearing = ((smoothedBearing % 360) + 360) % 360;
+  }
+
+  const outroStartProgress = 1 - (OUTRO_DURATION_DEFAULT_MS / Math.max(6000, durationMs));
+  if (clampedProgress >= outroStartProgress) {
+    const outroT = Math.min(1, Math.max(0, (clampedProgress - outroStartProgress) / Math.max(0.0001, 1 - outroStartProgress)));
+    setOutroProgress(outroT);
+  } else {
+    renderOutroState = null;
   }
 
   const trailCoords = [];

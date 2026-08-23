@@ -113,11 +113,44 @@ button:disabled {
   box-shadow: 0 6px 24px rgba(251, 191, 36, 0.2) !important;
 }
 
+#altitudeToggleButton {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
+  opacity: 0.55;
+  position: relative;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#altitudeToggleButton:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-1px) scale(1.03);
+}
+
+#altitudeToggleButton::before {
+  content: "⛰";
+  font-size: 17px;
+  line-height: 1;
+  text-align: center;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+}
+
 #altitudeToggleButton[aria-pressed="false"] {
   border-color: rgba(251, 191, 36, 0.14);
   background: linear-gradient(135deg, rgba(20, 34, 48, 0.86) 0%, rgba(17, 29, 42, 0.78) 100%);
-  color: rgba(231, 243, 255, 0.82);
   box-shadow: none;
+  opacity: 0.32;
+}
+
+#altitudeToggleButton[aria-pressed="false"]::before {
+  opacity: 0.55;
 }
 
 input[type="file"] {
@@ -149,18 +182,64 @@ input[type="number"]::selection {
 }
 
 .status-row {
-  padding: 10px 20px;
-  background: linear-gradient(90deg, rgba(8, 16, 28, 0.8) 0%, rgba(31, 46, 63, 0.4) 100%);
+  padding: 9px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: linear-gradient(90deg, rgba(8, 16, 28, 0.72) 0%, rgba(31, 46, 63, 0.3) 100%);
   border-bottom: 1px solid rgba(251, 191, 36, 0.1);
   box-shadow: inset 0 1px 0 rgba(251, 191, 36, 0.05);
+  min-height: 38px;
 }
 
 #statusText {
   margin: 0;
-  font-size: 0.93rem;
+  font-size: 0.88rem;
   font-weight: 500;
-  letter-spacing: 0.3px;
-  opacity: 0.95;
+  letter-spacing: 0.2px;
+  opacity: 0.92;
+  color: rgba(231, 243, 255, 0.84);
+}
+
+.shortcuts-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: rgba(231, 243, 255, 0.58);
+  font-size: 0.78rem;
+}
+
+.shortcut-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  border-radius: 999px;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.shortcut-pill:hover {
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.shortcut-key {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  background: rgba(15, 26, 42, 0.82);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 5px;
+  color: #fff8de;
+  font-weight: 700;
+  min-width: 20px;
+  text-align: center;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset;
 }
 
 #mapStage {
@@ -179,11 +258,19 @@ input[type="number"]::selection {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 
-    0 20px 50px rgba(0, 0, 0, 0.35),
-    0 0 1px rgba(251, 191, 36, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 24px 64px rgba(0, 0, 0, 0.58),
+    0 0 0 1px rgba(251, 191, 36, 0.18),
+    inset 0 1px 0 rgba(255,255,255,0.07);
   transition: box-shadow 0.3s ease;
   border: 1px solid rgba(251, 191, 36, 0.08);
+  background: #0b1623;
+}
+
+#mapFrame:hover {
+  box-shadow: 
+    0 30px 80px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(251, 191, 36, 0.24),
+    inset 0 1px 0 rgba(255,255,255,0.09);
 }
 
 #mapFrame.portrait {
